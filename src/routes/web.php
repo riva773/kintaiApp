@@ -1,6 +1,8 @@
 <?php
 
+use Illuminate\Auth\Events\Registered;
 use Illuminate\Support\Facades\Route;
+use Laravel\Fortify\Http\Controllers\RegisteredUserController;
 
 /*
 |--------------------------------------------------------------------------
