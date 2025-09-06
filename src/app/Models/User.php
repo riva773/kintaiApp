@@ -12,6 +12,23 @@ class User extends Authenticatable
 {
     use HasApiTokens, HasFactory, Notifiable;
 
+    public function attendance()
+    {
+        return $this->hasMany(Attendance::class);
+    }
+
+    public function workBreaks()
+    {
+        return $this->hasManyThrough(
+            WorkBreak::class,
+            Attendance::class,
+            'user_id',
+            'attendance_id',
+            'id',
+            'id'
+        );
+    }
+
     /**
      * The attributes that are mass assignable.
      *
