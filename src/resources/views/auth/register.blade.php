@@ -17,7 +17,7 @@
                 <input type="text" name="name" id="" class="input-name">
                 @error('name')
                 <div class="error">
-                    <span>{{ $message }}</span>
+                    <span class="error-message">{{ $message }}</span>
                 </div>
                 @enderror
             </div>
@@ -27,7 +27,7 @@
                 <input type="email" name="email" id="" class="input-email">
                 @error('email')
                 <div class="error">
-                    <span>{{ $message}}</span>
+                    <span class="error-message">{{ $message}}</span>
                 </div>
                 @enderror
             </div>
@@ -37,7 +37,7 @@
                 <input type="password" name="password" id="" class="input-password">
                 @error('password')
                 <div class="error">
-                    <span>{{ $message }}</span>
+                    <span class="error-message">{{ $message }}</span>
                 </div>
                 @enderror
             </div>
@@ -45,6 +45,13 @@
             <div class="form-password-confirmation">
                 <label for="password_confirmation" class="label-password-confirmation">パスワード確認</label>
                 <input type="password" name="password_confirmation" id="" class="input-password-confirmation">
+                @error('password_confirmation')
+                <div class="error">
+                    <span class="error-message">
+                        {{ $message}}
+                    </span>
+                </div>
+                @enderror
             </div>
 
             <div class="form-button">

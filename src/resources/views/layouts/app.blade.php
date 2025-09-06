@@ -6,14 +6,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>@yield('title')</title>
     @yield('css')
+    <link rel="stylesheet" href="{{ asset('css/header.css') }}">
 </head>
 
 <body>
     <header class="header">
-        <div class="header___inner">
-            <a href="#">
-                <img src="{{ asset('logo.svg') }}" alt="ヘッダーロゴ">
-            </a>
+        <div class="header-inner">
+            <div class="logo">
+                <a href="#">
+                    <img src="{{ asset('img/logo.svg') }}" alt="ヘッダーロゴ" class="logo-img">
+                </a>
+            </div>
         </div>
     </header>
 

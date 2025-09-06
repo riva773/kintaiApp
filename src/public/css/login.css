@@ -15,21 +15,22 @@
     margin-bottom: 45px;
 }
 
-.label-name,
+.form-email,
+.form-password {
+    margin-bottom: 45px;
+}
+
 .label-email,
-.label-password,
-.label-password-confirmation {
+.label-password {
     display: block;
     font-weight: 700;
     font-size: 24px;
 }
 
-.input-name,
 .input-email,
-.input-password,
-.input-password-confirmation {
-    margin-bottom: 45px;
+.input-password {
     width: 100%;
+    padding: 0 8px;
     height: 45px;
 }
 
@@ -54,4 +55,8 @@
 .register-link {
     text-decoration: none;
     font-size: 20px;
+}
+
+.error-message {
+    color: red;
 }

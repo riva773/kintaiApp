@@ -9,17 +9,22 @@
     <div class="form-container">
         <form action="{{ route('login') }}" method="post">
             @csrf
-
             <h1 class="main-title">ログイン</h1>
 
             <div class="form-email">
                 <label for="email" class="label-email">メールアドレス</label>
                 <input type="email" name="email" id="" class="input-email">
+                @error('email')
+                <span class="error-message">{{ $message}}</span>
+                @enderror
             </div>
 
             <div class="form-password">
                 <label for="password" class="label-password">パスワード</label>
                 <input type="password" name="password" id="" class="input-password">
+                @error('password')
+                <span class="error-message">{{ $message}}</span>
+                @enderror
             </div>
 
             <div class="form-button">
