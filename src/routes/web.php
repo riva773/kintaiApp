@@ -1,6 +1,6 @@
 <?php
 
-use App\Http\Controllers\AttendanceController;
+use App\Http\Controllers\AttendancesController;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Support\Facades\Route;
 use Laravel\Fortify\Fortify;
@@ -10,4 +10,4 @@ Route::get('/', function () {
     return view('welcome');
 });
 
-Route::get('/attendance', [AttendanceController::class, 'create'])->name('attendance.create');
+Route::get('/attendance', [AttendancesController::class, 'create'])->name('attendance.create');
