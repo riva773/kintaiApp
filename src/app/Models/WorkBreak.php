@@ -9,8 +9,16 @@ class WorkBreak extends Model
 {
     use HasFactory;
 
+    protected $table = 'breaks';
+
     public function attendance()
     {
         return $this->belongsTo(Attendance::class);
     }
+
+    protected $fillable = [
+        'attendance_id',
+        'break_started_at',
+        'break_ended_at',
+    ];
 }

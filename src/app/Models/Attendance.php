@@ -18,4 +18,12 @@ class Attendance extends Model
     {
         return $this->hasMany(WorkBreak::class);
     }
+
+    protected $fillable = [
+        'user_id',
+        'status',
+        'work_date',
+        'clock_in_at',
+        'clock_out_at',
+    ];
 }

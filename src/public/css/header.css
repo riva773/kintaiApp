@@ -19,3 +19,23 @@
     text-align: center;
     height: 40px;
 }
+
+.header-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.header-nav {
+    display: flex;
+    align-items: center;
+    gap: 60px;
+    margin-right: 60px;
+}
+
+.header-nav a {
+    color: #fff;
+    text-decoration: none;
+    font-weight: 700;
+    font-size: 24px;
+}

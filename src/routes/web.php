@@ -6,8 +6,7 @@ use Illuminate\Support\Facades\Route;
 use Laravel\Fortify\Fortify;
 use Laravel\Fortify\Http\Controllers\RegisteredUserController;
 
-Route::get('/', function () {
-    return view('welcome');
-});
 
-Route::get('/attendance', [AttendancesController::class, 'create'])->name('attendance.create');
+Route::get('/attendance', [AttendancesController::class, 'create'])->name('attendance.create')->middleware('auth');
+
+Route::post('/attendance', [AttendancesController::class, 'store'])->name('attendance.store');
