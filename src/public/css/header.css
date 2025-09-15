@@ -39,3 +39,15 @@
     font-weight: 700;
     font-size: 24px;
 }
+
+.logout-button {
+    background: none;
+    color: #fff;
+    text-decoration: none;
+    font-weight: 700;
+    font-size: 24px;
+    border: none;
+    cursor: pointer;
+}
+
+

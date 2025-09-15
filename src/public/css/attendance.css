@@ -17,4 +17,24 @@
     background-color: #C8C8C8;
     padding: 8px 20px;
     border-radius: 25px;
+    margin-top: 130px;
+    margin-bottom: 30px;
+}
+
+.now-date {
+    font-weight: 400;
+    font-size: 40px;
+    height: 48px;
+    margin-bottom: 40px;
+}
+
+.current-time {
+    font-size: 80px;
+    font-weight: 700;
+    margin-bottom: 100px;
+}
+
+.leaving-work-message {
+    font-size: 26px;
+    font-weight: 700;
 }

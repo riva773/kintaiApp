@@ -16,9 +16,8 @@
         @elseif($status == 'finished')
         <p class="status">退勤済</p>
         @endif
-        <p class="now_date">{{ $now->isoFormat('Y年M月D日(ddd)') }}</p>
-        <h1 id='current-time'>{{ $time }}</h1>
-        <!-- 現在の状況に応じて、出勤、退勤、休憩入り、休憩戻り、お疲れ様でしたのいずれかを表示する。 -->
+        <p class="now-date">{{ $now->isoFormat('Y年M月D日(ddd)') }}</p>
+        <h1 class='current-time'>{{ $time }}</h1>
         <div class="form-container">
             <form action="{{ route('attendance.store') }}" method="post">
                 @csrf
@@ -30,7 +29,7 @@
                 @elseif($status == 'on_break')
                 <button type="submit" name="action" value="break_end">休憩戻</button>
                 @elseif($status == 'finished')
-                お疲れ様でした。
+                <p class="leaving-work-message">お疲れ様でした。</p>
                 @endif
             </form>
         </div>
