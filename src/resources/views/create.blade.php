@@ -22,12 +22,12 @@
             <form action="{{ route('attendance.store') }}" method="post">
                 @csrf
                 @if($status == 'not_working')
-                <button type="submit" name="action" value="clock_in">出勤</button>
+                <button type="submit" name="action" value="clock_in" class="attendance-button">出勤</button>
                 @elseif($status == 'working')
-                <button type="submit" name="action" value="clock_out">退勤</button>
-                <button type="submit" name="action" value="break_start">休憩入</button>
+                <button type="submit" name="action" value="clock_out" class="leaving-work-button">退勤</button>
+                <button type="submit" name="action" value="break_start" class="starting-brake-button">休憩入</button>
                 @elseif($status == 'on_break')
-                <button type="submit" name="action" value="break_end">休憩戻</button>
+                <button type="submit" name="action" value="break_end" class="ending-brake-button">休憩戻</button>
                 @elseif($status == 'finished')
                 <p class="leaving-work-message">お疲れ様でした。</p>
                 @endif
