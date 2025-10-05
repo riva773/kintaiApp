@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AttendancesController;
+use App\Models\Attendance;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Support\Facades\Route;
 use Laravel\Fortify\Fortify;
@@ -12,3 +13,5 @@ Route::get('/attendance', [AttendancesController::class, 'create'])->name('atten
 Route::post('/attendance', [AttendancesController::class, 'store'])->name('attendance.store');
 
 Route::get('/attendance/list', [AttendancesController::class, 'index'])->name('attendance.index')->middleware('auth');;
+
+Route::get('/attendance/detail/{id}', [AttendancesController::class, 'show'])->name('attendance.show')->middleware(('auth'));

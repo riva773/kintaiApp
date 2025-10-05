@@ -33,7 +33,7 @@
                         <td>{{ $dailyRow['clock_out']}}</td>
                         <td>{{ $dailyRow['break_total']}}</td>
                         <td>{{ $dailyRow['work_total']}}</td>
-                        <td><a href="#" class="detail-link">詳細</a></td>
+                        <td><a href=" {{ route('attendance.show',['id' => $dailyRow['id']]) }}" class="detail-link">詳細</a></td>
                     </tr>
                     @endforeach
                 </tbody>

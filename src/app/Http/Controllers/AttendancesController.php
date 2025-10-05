@@ -159,24 +159,27 @@ class AttendancesController extends Controller
         foreach ($attendances as $attendance) {
             $clock_in = $attendance->clock_in_at;
             $clock_out = $attendance->clock_out_at;
-            $break_minutes = 0;
+            $break_seconds_total = 0;
             foreach ($attendance->breaks as $br) {
                 if ($br->break_started_at && $br->break_ended_at) {
-                    $break_minutes += $br->break_ended_at->diffInMinutes($br->break_started_at);
+                    $break_seconds_total += $br->break_ended_at->diffInSeconds($br->break_started_at);
                 }
             }
-            $work_minutes = 0;
-            if ($clock_in && $clock_out) {
-                $gross = $clock_out->diffInMinutes($clock_in);
-                $work_minutes = max(0, $gross - $break_minutes);
-            }
+            $break_minutes_rounded = round($break_seconds_total / 60);
 
-            $break_hours = floor($break_minutes / 60);
-            $break_minutes = $break_minutes % 60;
-            $work_hours = floor($work_minutes / 60);
-            $work_minutes = $work_minutes % 60;
+            $work_minutes_rounded = 0;
+            if ($clock_in && $clock_out) {
+                $gross_second = $clock_out->diffInSeconds($clock_in);
+                $work_second = max(0, $gross_second - $break_seconds_total);
+                $work_minutes_rounded = round($work_second / 60);
+            }
+            $break_hours = floor($break_minutes_rounded / 60);
+            $break_minutes = $break_minutes_rounded % 60;
+            $work_hours = floor($work_minutes_rounded / 60);
+            $work_minutes = $work_minutes_rounded % 60;
 
             $display = [
+                'id' => $attendance->id,
                 'date' => $attendance->work_date->isoFormat('MM/DD(ddd)'),
                 'clock_in' => $clock_in ? $clock_in->format('H:i') : '',
                 'clock_out' => $clock_out ? $clock_out->format('H:i') : '',
@@ -186,5 +189,44 @@ class AttendancesController extends Controller
             $dailyRows[] = $display;
         }
         return view('index', compact('dailyRows', 'current_year_month', 'prevYm', 'nextYm'));
+    }
+
+    public function show(Request $request)
+    {
+        $user = Auth::user();
+        $id = $request->id;
+        $target_month = Carbon::now()->startOfMonth();
+        $start_date = $target_month->copy()->startOfMonth();
+        $last_date = $target_month->copy()->lastOfMonth();
+        $attendance = Attendance::with('breaks')
+            ->where('user_id', $user->id)
+            ->whereBetween('work_date', [$start_date, $last_date])
+            ->where('id', $id)
+            ->first();
+
+        $attendance->work_date->format('m/d(ddd)');
+        $break_seconds_total = 0;
+        foreach ($attendance->breaks as $br) {
+            if ($br->break_started_at && $br->break_ended_at) {
+                $break_seconds_total += $br->break_ended_at->diffInSeconds($br->break_started_at);
+            }
+        }
+        $break_minutes_rounded = round($break_seconds_total / 60);
+
+        $clock_in = $attendance->clock_in_at;
+        $clock_out = $attendance->clock_out_at;
+        $work_seconds_total = 0;
+        if ($clock_in && $clock_out) {
+            $gross_seconds = $clock_out->diffInSeconds($clock_in);
+            $work_seconds_total = max(0, $gross_seconds - $break_seconds_total);
+            $work_minutes_rounded = round($work_seconds_total / 60);
+        }
+
+        $break_hours = intdiv($break_minutes_rounded, 60);
+        $break_minutes = round($break_minutes_rounded % 60);
+        $work_hours = intdiv($work_minutes_rounded, 60);
+        $work_minutes = round($work_minutes_rounded % 60);
+
+        return view('show', compact('attendance', 'break_hours', 'break_minutes', 'work_minutes', 'work_minutes'));
     }
 }
