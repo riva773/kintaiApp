@@ -10,3 +10,5 @@ use Laravel\Fortify\Http\Controllers\RegisteredUserController;
 Route::get('/attendance', [AttendancesController::class, 'create'])->name('attendance.create')->middleware('auth');
 
 Route::post('/attendance', [AttendancesController::class, 'store'])->name('attendance.store');
+
+Route::get('/attendance/list', [AttendancesController::class, 'index'])->name('attendance.index')->middleware('auth');;

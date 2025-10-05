@@ -21,4 +21,9 @@ class WorkBreak extends Model
         'break_started_at',
         'break_ended_at',
     ];
+
+    protected $casts = [
+        'break_started_at' => 'datetime',
+        'break_ended_at' => 'datetime',
+    ];
 }

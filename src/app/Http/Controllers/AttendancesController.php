@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Carbon\Carbon;
 use App\Models\WorkBreak;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Auth;
 
 class AttendancesController extends Controller
 {
@@ -129,5 +130,61 @@ class AttendancesController extends Controller
             }
             return redirect('/attendance')->with('success', '休憩を終了しました。');
         }
+    }
+
+    public function index(Request $request)
+    {
+        $ym = $request->query('ym', '');
+        if ($ym && preg_match('/^\d{4}-\d{2}$/', $ym)) {
+            try {
+                $target_month = Carbon::createFromFormat('Y-m', $ym);
+            } catch (\Exception $e) {
+                $target_month = Carbon::now()->startOfMonth();
+            }
+        } else {
+            $target_month = Carbon::now()->startOfMonth();
+        }
+        $dailyRows = [];
+        $current_year_month = $target_month->format('Y/m');
+        $now_date = $target_month->copy()->format('m/d(ddd)');
+        $start_date = $target_month->copy()->startOfMonth();
+        $last_date = $target_month->copy()->lastOfMonth();
+        $prevYm = $target_month->copy()->subMonths(1)->format('Y-m');
+        $nextYm = $target_month->copy()->addMonth()->format('Y-m');
+        $user = Auth::user();
+        $attendances = Attendance::with('breaks')
+            ->where('user_id', $user->id)
+            ->whereBetween('work_date', [$start_date, $last_date])
+            ->get();
+        foreach ($attendances as $attendance) {
+            $clock_in = $attendance->clock_in_at;
+            $clock_out = $attendance->clock_out_at;
+            $break_minutes = 0;
+            foreach ($attendance->breaks as $br) {
+                if ($br->break_started_at && $br->break_ended_at) {
+                    $break_minutes += $br->break_ended_at->diffInMinutes($br->break_started_at);
+                }
+            }
+            $work_minutes = 0;
+            if ($clock_in && $clock_out) {
+                $gross = $clock_out->diffInMinutes($clock_in);
+                $work_minutes = max(0, $gross - $break_minutes);
+            }
+
+            $break_hours = floor($break_minutes / 60);
+            $break_minutes = $break_minutes % 60;
+            $work_hours = floor($work_minutes / 60);
+            $work_minutes = $work_minutes % 60;
+
+            $display = [
+                'date' => $attendance->work_date->isoFormat('MM/DD(ddd)'),
+                'clock_in' => $clock_in ? $clock_in->format('H:i') : '',
+                'clock_out' => $clock_out ? $clock_out->format('H:i') : '',
+                'break_total' => sprintf('%d:%02d', $break_hours, $break_minutes),
+                'work_total' => sprintf('%d:%02d', $work_hours, $work_minutes),
+            ];
+            $dailyRows[] = $display;
+        }
+        return view('index', compact('dailyRows', 'current_year_month', 'prevYm', 'nextYm'));
     }
 }

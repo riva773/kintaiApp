@@ -46,9 +46,8 @@
 
         const formattedTime = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
 
-        document.getElementById('current-time').textContent = formattedTime;
+        document.querySelector('.current-time').textContent = formattedTime;
     }
-
     updateClock();
     setInterval(updateClock, 1000);
 </script>

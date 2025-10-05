@@ -5,6 +5,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="{{ asset('css/header.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.1/css/all.min.css">
+
+
+
     @yield('css')
     <title>@yield('title')</title>
 </head>
@@ -20,7 +24,7 @@
             <div class="nav">
                 <nav class="header-nav">
                     <a href="{{ route('attendance.create') }}">勤怠</a>
-                    <a href="#">勤怠一覧</a>
+                    <a href="{{ route('attendance.index') }}">勤怠一覧</a>
                     <a href="#">申請</a>
                     <form action="{{ route('logout')}}" method="post">
                         @csrf
