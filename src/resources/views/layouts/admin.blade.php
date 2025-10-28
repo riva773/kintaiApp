@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{{ asset('css/header.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.1/css/all.min.css">
+
+
+
+    @yield('css')
+    <title>@yield('title')</title>
+</head>
+
+<body>
+    <header class="header">
+        <div class="header-inner">
+            <div class="logo">
+                <a href="#">
+                    <img src="{{ asset('img/logo.svg') }}" alt="ヘッダーロゴ" class="logo-img">
+                </a>
+            </div>
+            <div class="nav">
+                <nav class="header-nav">
+                    <a href="{{ route('admin.attendance.index') }}">勤怠一覧</a>
+                    <a href="{{ route('admin.staff.index') }}">スタッフ一覧</a>
+                    <a href="{{ route('approvals.index')}}">申請一覧</a>
+                    <form action="{{ route('logout')}}" method="post">
+                        @csrf
+                        <button type="submit" class="logout-button">ログアウト</button>
+                    </form>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        @yield('content')
+    </main>
+
+    @stack('scripts')
+</body>
+
+</html>

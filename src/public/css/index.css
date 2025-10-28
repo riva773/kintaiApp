@@ -13,18 +13,18 @@ body {
     margin-bottom: 50px;
 }
 
-.prev-year-month,.next-year-month {
+.prev-day,.next-day,.prev-year-month,.next-year-month {
     font-weight: 700;
     color: #737373;
     font-size: 16px;
     text-decoration: none;
 }
-.current-year-month {
+.current-day,.current-year-month {
     font-weight: 700;
     font-size: 20px;
 }
 
-.select-month {
+.select-day,.select-month {
     display: flex;
     justify-content: space-between;
     background-color: #fff;

@@ -25,7 +25,7 @@
                 <nav class="header-nav">
                     <a href="{{ route('attendance.create') }}">勤怠</a>
                     <a href="{{ route('attendance.index') }}">勤怠一覧</a>
-                    <a href="#">申請</a>
+                    <a href="{{ route('approvals.index')}}">申請</a>
                     <form action="{{ route('logout')}}" method="post">
                         @csrf
                         <button type="submit" class="logout-button">ログアウト</button>

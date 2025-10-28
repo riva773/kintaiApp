@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\SubmitCorrectionRequest;
 use App\Models\Attendance;
+use App\Models\AttendanceApproval;
+use App\Models\AttendanceApprovalBreak;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
-use App\Models\WorkBreak;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 
@@ -55,10 +57,10 @@ class AttendancesController extends Controller
             if ($attendance->clock_out_at) {
                 return redirect('/attendance')->with('error', '既に退勤済みです。');
             }
-            $hasOpenBreak = $attendance->breaks()
+            $has_open_breakBreak = $attendance->breaks()
                 ->whereNull('break_ended_at')
                 ->exists();
-            if ($hasOpenBreak) {
+            if ($has_open_breakBreak) {
                 return redirect('/attendance')->with('error', '休憩を終了してから退勤してください。');
             }
 
@@ -77,8 +79,8 @@ class AttendancesController extends Controller
                 DB::transaction(function () use ($now, $attendance) {
                     $att = Attendance::where('id', $attendance->id)->lockForUpdate()->first();
 
-                    $hasOpenBreak = $att->breaks()->whereNull('break_ended_at')->lockForUpdate()->exists();
-                    if ($hasOpenBreak) {
+                    $has_open_breakBreak = $att->breaks()->whereNull('break_ended_at')->lockForUpdate()->exists();
+                    if ($has_open_breakBreak) {
                         throw new \RuntimeException(('既に休憩中です。'));
                     }
                     $att->breaks()->create([
@@ -107,18 +109,18 @@ class AttendancesController extends Controller
                     $att = Attendance::whereKey($attendance->id)
                         ->lockForUpdate()
                         ->first();
-                    $openBreak = $att->breaks()
+                    $open_break = $att->breaks()
                         ->whereNull('break_ended_at')
                         ->orderByDesc('break_started_at')
                         ->lockForUpdate()
                         ->first();
 
-                    if (!$openBreak) {
+                    if (!$open_break) {
                         throw new \RuntimeException('開始中の休憩はありません。');
                     }
 
-                    $openBreak->break_ended_at = $now;
-                    $openBreak->save();
+                    $open_break->break_ended_at = $now;
+                    $open_break->save();
 
                     $att->status = 'working';
                     $att->save();
@@ -144,13 +146,12 @@ class AttendancesController extends Controller
         } else {
             $target_month = Carbon::now()->startOfMonth();
         }
-        $dailyRows = [];
+        $daily_rows = [];
         $current_year_month = $target_month->format('Y/m');
-        $now_date = $target_month->copy()->format('m/d(ddd)');
         $start_date = $target_month->copy()->startOfMonth();
         $last_date = $target_month->copy()->lastOfMonth();
-        $prevYm = $target_month->copy()->subMonths(1)->format('Y-m');
-        $nextYm = $target_month->copy()->addMonth()->format('Y-m');
+        $prev_ym = $target_month->copy()->subMonths(1)->format('Y-m');
+        $next_ym = $target_month->copy()->addMonth()->format('Y-m');
         $user = Auth::user();
         $attendances = Attendance::with('breaks')
             ->where('user_id', $user->id)
@@ -186,47 +187,145 @@ class AttendancesController extends Controller
                 'break_total' => sprintf('%d:%02d', $break_hours, $break_minutes),
                 'work_total' => sprintf('%d:%02d', $work_hours, $work_minutes),
             ];
-            $dailyRows[] = $display;
+            $daily_rows[] = $display;
         }
-        return view('index', compact('dailyRows', 'current_year_month', 'prevYm', 'nextYm'));
+        return view('index', compact('daily_rows', 'current_year_month', 'prev_ym', 'next_ym'));
     }
-
-    public function show(Request $request)
+    public function show($id)
     {
         $user = Auth::user();
-        $id = $request->id;
-        $target_month = Carbon::now()->startOfMonth();
-        $start_date = $target_month->copy()->startOfMonth();
-        $last_date = $target_month->copy()->lastOfMonth();
-        $attendance = Attendance::with('breaks')
-            ->where('user_id', $user->id)
-            ->whereBetween('work_date', [$start_date, $last_date])
-            ->where('id', $id)
+        $attendance = Attendance::with(['breaks' => function ($q) {
+            $q->orderBy('break_started_at')->orderBy('id');
+        }])->where('user_id', $user->id)->findOrFail($id);
+
+        $pending_approval = AttendanceApproval::with([
+            'breaks' => fn($q) => $q->orderBy('proposed_break_started_at')->orderBy('id')
+        ])
+            ->where('attendance_id', $attendance->id)
+            ->where('status', 'pending')
+            ->latest('id')
             ->first();
 
-        $attendance->work_date->format('m/d(ddd)');
-        $break_seconds_total = 0;
-        foreach ($attendance->breaks as $br) {
-            if ($br->break_started_at && $br->break_ended_at) {
-                $break_seconds_total += $br->break_ended_at->diffInSeconds($br->break_started_at);
+        $has_pending = (bool) $pending_approval;
+        $breaks = $attendance->breaks;
+
+        $resolved_clock_in  = null;
+        $resolved_clock_out = null;
+        $resolved_remarks   = null;
+        $resolved_breaks    = collect();
+
+        if ($has_pending) {
+            $resolved_clock_in  = $pending_approval->proposed_clock_in_at  ?? $attendance->clock_in_at;
+            $resolved_clock_out = $pending_approval->proposed_clock_out_at ?? $attendance->clock_out_at;
+            $resolved_remarks   = !is_null($pending_approval->proposed_remarks)
+                ? $pending_approval->proposed_remarks
+                : ($attendance->remarks ?? null);
+
+            if ($pending_approval->breaks->isNotEmpty()) {
+                $resolved_breaks = $pending_approval->breaks->map(function ($br) {
+                    return [
+                        'start' => $br->proposed_break_started_at,
+                        'end'   => $br->proposed_break_ended_at,
+                    ];
+                });
+            } else {
+                $resolved_breaks = $attendance->breaks->map(function ($br) {
+                    return [
+                        'start' => $br->break_started_at,
+                        'end'   => $br->break_ended_at,
+                    ];
+                });
             }
         }
-        $break_minutes_rounded = round($break_seconds_total / 60);
 
-        $clock_in = $attendance->clock_in_at;
-        $clock_out = $attendance->clock_out_at;
-        $work_seconds_total = 0;
-        if ($clock_in && $clock_out) {
-            $gross_seconds = $clock_out->diffInSeconds($clock_in);
-            $work_seconds_total = max(0, $gross_seconds - $break_seconds_total);
-            $work_minutes_rounded = round($work_seconds_total / 60);
+        return view('show', compact(
+            'user',
+            'attendance',
+            'breaks',
+            'has_pending',
+            'resolved_clock_in',
+            'resolved_clock_out',
+            'resolved_remarks',
+            'resolved_breaks'
+        ));
+    }
+
+    public function submitCorrection(SubmitCorrectionRequest $request, Attendance $attendance)
+    {
+        $user = Auth::user();
+        $current_clock_in = $attendance->clock_in_at?->format('H:i');
+        $current_clock_out = $attendance->clock_out_at?->format('H:i');
+        $proposed_ws = $request->input('work-start');
+        $proposed_we = $request->input('work-end');
+        $changed_clock_in = $proposed_ws !== null && $proposed_ws !== $current_clock_in;
+        $changed_clock_out = $proposed_we !== null && $proposed_we !== $current_clock_out;
+
+        $current_breaks = [];
+        foreach ($attendance->breaks as $br) {
+            $current_breaks[] = [
+                'start' => $br->break_started_at?->format('H:i'),
+                'end' => $br->break_ended_at?->format('H:i'),
+            ];
+        }
+        $input_breaks = $request->input('breaks', []);
+        $new_breaks = [];
+        foreach ($input_breaks as $row) {
+            $bs = $row['start'] ?? null;
+            $be = $row['end'] ?? null;
+            if ($bs === null && $be === null) {
+                continue;
+            }
+            $new_breaks[] = [
+                'start' => $bs,
+                'end' => $be,
+            ];
+        }
+        $changed_breaks = ($new_breaks !== $current_breaks);
+
+        if (!$changed_clock_in && !$changed_clock_out && !$changed_breaks) {
+            return back()->withInput()->withErrors(['proposed_remarks' => '修正内容がありません。いずれかの項目を変更してください。']);
         }
 
-        $break_hours = intdiv($break_minutes_rounded, 60);
-        $break_minutes = round($break_minutes_rounded % 60);
-        $work_hours = intdiv($work_minutes_rounded, 60);
-        $work_minutes = round($work_minutes_rounded % 60);
+        DB::transaction(function () use ($request, $attendance, $user, $changed_clock_in, $changed_clock_out, $changed_breaks, $proposed_ws, $proposed_we, $new_breaks) {
+            $ap = new AttendanceApproval();
+            $ap->attendance()->associate($attendance);
+            $ap->user()->associate($user);
 
-        return view('show', compact('attendance', 'break_hours', 'break_minutes', 'work_minutes', 'work_minutes'));
+            if ($changed_clock_in) {
+                $ap->proposed_clock_in_at = $this->combineDateHhmm($attendance->work_date, $proposed_ws);
+            }
+            if ($changed_clock_out) {
+                $ap->proposed_clock_out_at = $this->combineDateHhmm($attendance->work_date, $proposed_we);
+            }
+            $ap->proposed_remarks = $request->input('proposed_remarks');
+            $ap->status = 'pending';
+            $ap->save();
+            if (!empty($new_breaks)) {
+                foreach ($new_breaks as $i => $row) {
+                    $bs = $row['start'];
+                    $be = $row['end'];
+                    $br = new AttendanceApprovalBreak();
+                    $br->attendance_approval_id = $ap->id;
+                    $br->sequence_no = $i + 1;
+                    if ($bs !== null) {
+                        $br->proposed_break_started_at = $this->combineDateHhmm($attendance->work_date, $bs);
+                    }
+                    if ($be !== null) {
+                        $br->proposed_break_ended_at = $this->combineDateHhmm($attendance->work_date, $be);
+                    }
+                    $br->save();
+                }
+            }
+        });
+
+        return redirect()->route('attendance.show', ['id' => $attendance->id])->with('status', '修正申請を受け付けました。');
+    }
+    private function combineDateHhmm(?Carbon $date, ?String $hhmm)
+    {
+        if ($date === null || $hhmm === null || $hhmm === '') {
+            return null;
+        }
+        [$h, $m] = array_map('intval', explode(':', $hhmm));
+        return $date->copy()->setTime($h, $m, 0);
     }
 }

@@ -1,0 +1,57 @@
+body {
+    background-color: #F0EFF2;
+}
+
+.index-container {
+    width: 900px;
+    margin: 80px auto 0;
+}
+
+.approvals-title {
+    border-left: 8px solid #000;
+    padding-left: 8px;
+    margin-bottom: 50px;
+}
+
+.approvals-tabs{
+    padding-bottom: 20px;
+    border-bottom:1px solid #000;
+    margin-bottom: 40px;
+}
+
+.nav-pending {
+    padding-left: 80px;
+    padding-right: 80px;
+}
+
+.approvals-table {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: separate;
+    border-spacing: 0 4px;
+    border-radius: 10px;
+}
+
+.approvals-table-row {
+    background-color: #fff;
+    text-align: center;
+}
+
+th,
+td {
+    color: #737373;
+    font-weight: 700;
+    font-size: 16px;
+    padding: 10px;
+}
+
+.approvals-tabs a {
+    margin-right: 16px;
+    text-decoration: none;
+    color: #666;
+    font-weight: 700;
+}
+
+.approvals-tabs a.active {
+    color: #000;
+}

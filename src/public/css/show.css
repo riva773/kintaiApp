@@ -1,0 +1,98 @@
+body {
+    background-color: #F0EFF2;
+}
+
+.container {
+    width: 900px;
+    margin: 80px auto 0;
+}
+
+.attendance-container {
+    margin: 0 auto;
+}
+
+.form-container {
+    margin-top: 60px;
+    background: #fff;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.page-title {
+    border-left: 8px solid #000;
+    padding-left: 8px;
+    font-weight: 700;
+}
+
+.row {
+    display: grid;
+    grid-template-columns: 300px 1fr 1fr 1fr 1fr;
+    align-items: center;
+    padding: 20px 28px;
+    font-size: 16px;
+    border-top: 1px solid #EDEDED;
+}
+
+.label {
+    color: #737373;
+    font-weight: 600;
+}
+
+.row-single .value-full {
+    grid-column: 2 / -1;
+}
+
+.data {
+    font-size: 16px;
+}
+
+.input {
+    width: 90px;
+    height: 36px;
+    border: 1px solid #E1E1E1;
+    border-radius: 6px;
+    padding: 0 8px;
+    text-align: center;
+    background: #fff;
+}
+.row-remarks textarea {
+    grid-column: 2 / 5;
+    width: 100%;
+    min-height: 60px;
+    border: 1px solid #E1E1E1;
+    border-radius: 6px;
+    padding: 10px 12px;
+    resize: vertical;
+    font-size: 16px;
+}
+
+.btn-edit {
+    background-color: #000;
+    color: #fff;
+    font-size: 22px;
+    font-weight: bold;
+    padding: 8px 30px;
+    border-radius: 4px;
+    margin-top: 30px;
+    margin-left: 790px;
+    cursor: pointer;
+}
+
+.approved {
+    background-color: #696969;
+    color: #fff;
+    font-size: 22px;
+    font-weight: bold;
+    padding: 8px 30px;
+    border-radius: 4px;
+    margin-top: 30px;
+    margin-left: 730px;
+    letter-spacing: 0.2rem;
+    text-align: center;
+}
+
+.alert-message {
+    color: red;
+    margin-top: 30px;
+    margin-left: 620px;
+}
