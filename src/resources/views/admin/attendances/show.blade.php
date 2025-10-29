@@ -12,10 +12,6 @@
     <div class="alert alert-success">{{ session('status') }}</div>
     @endif
 
-    @error('pending')
-    <div class="alert alert-warning">{{ $message }}</div>
-    @enderror
-
     @if ($has_pending)
     @php
     $fmt = function ($v) {
@@ -28,7 +24,7 @@
 
     $rb_is_collection = $resolved_breaks instanceof \Illuminate\Support\Collection;
     $rb_count = $rb_is_collection ? $resolved_breaks->count() : (is_array($resolved_breaks) ? count($resolved_breaks) : 0);
-    $row_count = max(2, $rb_count);
+    $show_break_rows = max(2, $rb_count);
     @endphp
 
     <div class="form-container">
@@ -51,7 +47,7 @@
             <p class="data">{{ $fmt($resolved_clock_out) ?? '-' }}</p>
         </div>
 
-        @for ($i = 0; $i < $row_count; $i++)
+        @for ($i = 0; $i < $show_break_rows; $i++)
             @php
             $row=$rb_is_collection ? $resolved_breaks->get($i) : ($resolved_breaks[$i] ?? null);
             $b_st = $fmt($row['start'] ?? null);
@@ -72,22 +68,21 @@
                 </p>
             </div>
     </div>
+
+    <div class="alert alert-warning">
+        <p class="alert-message">※承認待ちのため修正はできません。</p>
+    </div>
+
     @else
+    @error('work-start')
+    <p class="text-red-500">{{ $message }}</p>
+    @enderror
+    @error('work-end')
+    <p class="text-red-500">{{ $message }}</p>
+    @enderror
 
-    @error('work-start') <p class="text-red-500">{{ $message }}</p> @enderror
-    @error('work-end') <p class="text-red-500">{{ $message }}</p> @enderror
-    @foreach ($errors->getMessages() as $field => $msgs)
-    @if (str_starts_with($field, 'breaks.'))
-    @foreach ($msgs as $m)
-    <p class="text-red-500">{{ $m }}</p>
-    @endforeach
-    @endif
-    @endforeach
-
-    <form action="{{ route('admin.attendance.update', ['id' => $attendance->id]) }}" method="post" class="form">
+    <form action="{{ route('attendance.corrections.submit',['attendance' => $attendance ])}}" method="post" class="form">
         @csrf
-        @method('patch')
-
         <div class="form-container">
             <div class="row row--single">
                 <p class="label">名前</p>
@@ -96,7 +91,7 @@
 
             <div class="row">
                 <p class="label">日付</p>
-                <p class="data">{{ $attendance->work_date->format('Y年') }}</p>
+                <p class="data">{{ $attendance->work_date->format('Y年')}}</p>
                 <p class="divider"></p>
                 <p class="data">{{ $attendance->work_date->format('m月d日') }}</p>
             </div>
@@ -105,28 +100,35 @@
                 <p class="label">出勤・退勤</p>
                 <input type="text" name="work-start" id="work-start"
                     class="data input"
-                    value="{{ old('work-start', $attendance->clock_in_at?->format('H:i')) }}"
-                    placeholder="-">
+                    value="{{ $attendance->clock_in_at?->format('H:i') }}" placeholder="-">
                 <p class="divider">〜</p>
-                <input type="text" name="work-end" id="work-end"
-                    class="data input"
-                    value="{{ old('work-end', $attendance->clock_out_at?->format('H:i')) }}"
-                    placeholder="-">
+                <input type="text" name="work-end" class="data work-end input" id="work-end"
+                    value="{{ $attendance->clock_out_at?->format('H:i') }}" placeholder="-">
             </div>
 
             @foreach ($breaks as $br)
-            @php $i = $loop->index; @endphp
             <div class="row">
-                <p class="label">{{ $loop->first ? '休憩' : '休憩'.$loop->iteration }}</p>
-                <input type="text" name="breaks[{{ $i }}][start]"
-                    class="data input"
-                    value="{{ old("breaks.$i.start", $br->break_started_at?->format('H:i')) }}"
-                    placeholder="-">
+                <p class="label">
+                    @if($loop->first)
+                    休憩
+                    @else
+                    休憩{{ $loop->iteration }}
+                    @endif
+                </p>
+                <input type="text" name="breaks[{{ $loop->index }}][start]"
+                    class="data break-start-data input"
+                    value="{{ $br->break_started_at?->format('H:i') }}">
                 <p class="divider">〜</p>
-                <input type="text" name="breaks[{{ $i }}][end]"
+                <input type="text" name="breaks[{{ $loop->index }}][end]"
                     class="data input"
-                    value="{{ old("breaks.$i.end", $br->break_ended_at?->format('H:i')) }}"
-                    placeholder="-">
+                    value="{{ $br->break_ended_at?->format('H:i') }}">
+
+                @error('breaks.' . $loop->index . '.start')
+                <p class="text-red-500">{{ $message }}</p>
+                @enderror
+                @error('breaks.' . $loop->index . '.end')
+                <p class="text-red-500">{{ $message }}</p>
+                @enderror
             </div>
             @endforeach
 
@@ -134,17 +136,22 @@
             <div class="row">
                 <p class="label">休憩{{ $next + 1 }}</p>
                 <input type="text" name="breaks[{{ $next }}][start]"
-                    class="data input"
-                    value="{{ old("breaks.$next.start") }}" placeholder="-">
+                    id="breaks_{{ $next }}_start"
+                    class="data break-start-data input"
+                    value="" placeholder="-">
                 <p class="divider">〜</p>
                 <input type="text" name="breaks[{{ $next }}][end]"
+                    id="breaks_{{ $next }}_end"
                     class="data input"
-                    value="{{ old("breaks.$next.end") }}" placeholder="-">
+                    value="" placeholder="-">
             </div>
 
             <div class="row row-remarks row-single">
                 <p class="label">備考</p>
-                <textarea name="remarks" class="data input value-full" rows="2" placeholder="変更理由を記載してください（必須）">{{ old('remarks', $attendance->remarks) }}</textarea>
+                <textarea name="proposed_remarks" id="remarks-data"></textarea>
+                @error('proposed_remarks')
+                <p class="text-red-500">{{ $message }}</p>
+                @enderror
             </div>
         </div>
         <div class="btn">
