@@ -8,6 +8,8 @@ use App\Http\Middleware\EnsureAdmin;
 use Illuminate\Foundation\Auth\EmailVerificationRequest;
 use Illuminate\Http\Request;
 
+Route::redirect('/', '/login');
+
 
 
 require __DIR__ . '/admin.php';
