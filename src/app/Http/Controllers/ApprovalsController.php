@@ -2,152 +2,109 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
+use App\Http\Requests\Admin\ApproveCorrectionRequest;
 use App\Models\Attendance;
 use App\Models\AttendanceApproval;
+use App\Models\AttendanceApprovalBreak;
+use App\Models\WorkBreak;
+use Illuminate\Support\Facades\DB;
+use Carbon\Carbon;
 
 class ApprovalsController extends Controller
 {
-    public function index(Request $request)
+    public function index()
     {
-        $user = $request->user();
+        $rows = AttendanceApproval::with(['attendance.user'])
+            ->where('status', 'pending')
+            ->orderByDesc('id')
+            ->paginate(20);
 
-        if ($user && $user->role === 'admin') {
-            return $this->indexForAdmin($request);
-        } else {
-            return $this->indexForGeneral($request);
-        }
+        return view('admin.approvals.index', compact('rows'));
     }
 
-    public function indexForAdmin(Request $request)
+    public function history()
     {
-        $status = $request->query('status');
-        if (!in_array($status, ['pending', 'approved'], true)) {
-            $status = 'pending';
-        }
+        $rows = AttendanceApproval::with(['attendance.user'])
+            ->whereIn('status', ['approved', 'rejected'])
+            ->orderByDesc('id')
+            ->paginate(20);
 
-        $approvals = AttendanceApproval::with(['user', 'attendance'])
-            ->where('status', $status)
-            ->orderByDesc('created_at')
-            ->get();
-
-        return view('admin.approvals.index', compact('approvals', 'status'));
+        return view('admin.approvals.history', compact('rows'));
     }
 
-    public function indexForGeneral(Request $request)
+    public function show(AttendanceApproval $attendance_correct_request)
     {
-        $user = auth()->user();
-        $status = $request->query('status');
-        if (!in_array($status, ['pending', 'approved'], true)) {
-            $status = 'pending';
-        }
-
-        $approvals = AttendanceApproval::with('attendance')
-            ->where('user_id', $user->id)
-            ->where('status', $status)
-            ->orderByDesc('created_at')
-            ->get();
-
-        return view('approvals.index', compact('approvals', 'user', 'status'));
-    }
-
-    public function show($id)
-    {
-        $approval = AttendanceApproval::with([
+        $attendance_correct_request->load([
             'attendance.user',
-            'attendance.breaks' => fn($q) => $q->orderBy('break_started_at')->orderBy('id'),
-            'breaks'            => fn($q) => $q->orderBy('proposed_break_started_at')->orderBy('id'),
-        ])->findOrFail($id);
+            'breaks' => fn($q) => $q->orderBy('sequence_no'),
+        ]);
 
-        $attendance = $approval->attendance;
+        $attendance = $attendance_correct_request->attendance;
         $user       = $attendance->user;
 
-        $resolved_clock_in  = $approval->proposed_clock_in_at  ?? $attendance->clock_in_at;
-        $resolved_clock_out = $approval->proposed_clock_out_at ?? $attendance->clock_out_at;
-        $resolved_remarks   = !is_null($approval->proposed_remarks)
-            ? $approval->proposed_remarks
-            : ($attendance->remarks ?? null);
+        $breaks = $attendance->breaks()->orderBy('break_started_at')->get();
 
-        if ($approval->breaks->isNotEmpty()) {
-            $resolved_breaks = $approval->breaks->map(fn($br) => [
-                'start' => $br->proposed_break_started_at,
-                'end'   => $br->proposed_break_ended_at,
-            ]);
-        } else {
-            $resolved_breaks = $attendance->breaks->map(fn($br) => [
-                'start' => $br->break_started_at,
-                'end'   => $br->break_ended_at,
-            ]);
-        }
-
-        $is_pending = ($approval->status === 'pending');
+        $hasPending = AttendanceApproval::where('attendance_id', $attendance->id)
+            ->where('status', 'pending')
+            ->exists();
 
         return view('admin.approvals.show', compact(
-            'user',
+            'attendance_correct_request',
             'attendance',
-            'approval',
-            'resolved_clock_in',
-            'resolved_clock_out',
-            'resolved_remarks',
-            'resolved_breaks',
-            'is_pending'
+            'user',
+            'breaks',
+            'hasPending'
         ));
     }
 
-    public function approve(Request $request, $id)
+    public function approve(ApproveCorrectionRequest $request, AttendanceApproval $attendance_correct_request)
     {
-        $approval = AttendanceApproval::with([
-            'attendance',
-            'breaks' => fn($q) => $q->orderBy('proposed_break_started_at')->orderBy('id')
-        ])->findOrFail($id);
+        $decision = $request->validated()['decision'];
 
-        if ($approval->status !== 'pending') {
-            return redirect()
-                ->route('admin.approvals.show', ['id' => $approval->id])
-                ->with('status', 'この申請は既に処理済みです。');
-        }
-
-        DB::transaction(function () use ($approval) {
-            $attendance = $approval->attendance()->lockForUpdate()->firstOrFail();
-
-            if (!is_null($approval->proposed_clock_in_at)) {
-                $attendance->clock_in_at = $approval->proposed_clock_in_at;
-            }
-            if (!is_null($approval->proposed_clock_out_at)) {
-                $attendance->clock_out_at = $approval->proposed_clock_out_at;
-            }
-            if (!is_null($approval->proposed_remarks)) {
-                $attendance->remarks = $approval->proposed_remarks;
-            }
-            $attendance->save();
-
-            if ($approval->breaks->isNotEmpty()) {
-                $attendance->breaks()->delete();
-
-                $seq = 1;
-                foreach ($approval->breaks as $ap_break) {
-                    $start = $ap_break->proposed_break_started_at;
-                    $end   = $ap_break->proposed_break_ended_at;
-
-                    if (is_null($start)) {
-                        continue;
-                    }
-
-                    $attendance->breaks()->create([
-                        'sequence_no'      => $seq++,
-                        'break_started_at' => $start,
-                        'break_ended_at'   => $end,
-                    ]);
-                }
+        DB::transaction(function () use ($decision, $attendance_correct_request, $request) {
+            if ($decision === 'reject') {
+                $attendance_correct_request->status         = 'rejected';
+                $attendance_correct_request->admin_remarks  = (string)$request->input('admin_remarks');
+                $attendance_correct_request->save();
+                return;
             }
 
-            $approval->status = 'approved';
-            $approval->save();
+            $att = Attendance::with('breaks')->lockForUpdate()->findOrFail($attendance_correct_request->attendance_id);
+
+            $att->clock_in_at  = $attendance_correct_request->proposed_clock_in_at ?: $att->clock_in_at;
+            $att->clock_out_at = $attendance_correct_request->proposed_clock_out_at ?: $att->clock_out_at;
+            if ($attendance_correct_request->proposed_remarks !== null) {
+                $att->remarks = $attendance_correct_request->proposed_remarks;
+            }
+
+            $att->breaks()->delete();
+
+            $base = $att->work_date instanceof Carbon
+                ? $att->work_date->copy()->startOfDay()
+                : Carbon::now()->startOfDay();
+
+            foreach ($attendance_correct_request->breaks()->orderBy('sequence_no')->get() as $r) {
+                $wb = new WorkBreak();
+                $wb->attendance_id    = $att->id;
+                $wb->break_started_at = $r->proposed_break_started_at ?: null;
+                $wb->break_ended_at   = $r->proposed_break_ended_at ?: null;
+                $wb->save();
+            }
+
+            if ($att->clock_in_at && !$att->clock_out_at) {
+                $att->status = 'working';
+            } elseif ($att->clock_in_at && $att->clock_out_at) {
+                $att->status = 'done';
+            } else {
+                $att->status = 'not_working';
+            }
+            $att->save();
+
+            $attendance_correct_request->status        = 'approved';
+            $attendance_correct_request->admin_remarks = (string)$request->input('admin_remarks');
+            $attendance_correct_request->save();
         });
 
-        return redirect()
-            ->route('admin.approvals.show', ['id' => $approval->id])
-            ->with('status', '申請を承認し、勤怠に反映しました。');
+        return back()->with('status', '申請を処理しました');
     }
 }

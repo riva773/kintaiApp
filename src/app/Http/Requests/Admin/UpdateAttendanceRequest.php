@@ -17,44 +17,92 @@ class UpdateAttendanceRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'work-start' => ['nullable', 'regex:/^\d{2}:\d{2}$/'],
-            'work-end'   => ['nullable', 'regex:/^\d{2}:\d{2}$/'],
-            'breaks.*.start' => ['nullable', 'regex:/^\d{2}:\d{2}$/'],
-            'breaks.*.end'   => ['nullable', 'regex:/^\d{2}:\d{2}$/'],
-            'clock_in_at'     => ['nullable', 'regex:/^\d{2}:\d{2}$/'],
-            'clock_out_at'    => ['nullable', 'regex:/^\d{2}:\d{2}$/'],
-            'remarks'         => ['required', 'string', 'max:255'],
+            'work-start'        => ['nullable', 'date_format:H:i'],
+            'work-end'          => ['nullable', 'date_format:H:i'],
+
+            'clock_in_at'       => ['nullable', 'date_format:H:i'],
+            'clock_out_at'      => ['nullable', 'date_format:H:i'],
+
+            'breaks'            => ['nullable', 'array'],
+            'breaks.*.start'    => ['nullable', 'date_format:H:i'],
+            'breaks.*.end'      => ['nullable', 'date_format:H:i'],
+
+            'remarks'           => ['required', 'string', 'max:255'],
         ];
     }
 
     public function messages(): array
     {
         return [
-            'work-start.regex'        => '出勤時間が不適切な値です（HH:MM）',
-            'work-end.regex'          => '退勤時間が不適切な値です（HH:MM）',
-            'breaks.*.start.regex'    => '休憩開始が不適切な値です（HH:MM）',
-            'breaks.*.end.regex'      => '休憩終了が不適切な値です（HH:MM）',
-            'clock_in_at.regex'       => '出勤時間が不適切な値です（HH:MM）',
-            'clock_out_at.regex'      => '退勤時間が不適切な値です（HH:MM）',
-            'remarks.required'        => '備考は必須です（変更理由を記載してください）',
+            'work-start.date_format'        => '出勤時間もしくは退勤時間が不適切な値です',
+            'work-end.date_format'          => '出勤時間もしくは退勤時間が不適切な値です',
+            'clock_in_at.date_format'       => '出勤時間もしくは退勤時間が不適切な値です',
+            'clock_out_at.date_format'      => '出勤時間もしくは退勤時間が不適切な値です',
+
+            'breaks.*.start.date_format'    => '休憩時間が不適切な値です',
+            'breaks.*.end.date_format'      => '休憩時間が不適切な値です',
+
+            'remarks.required'              => '備考を記入してください',
+            'remarks.max'                   => '備考を記入してください',
         ];
+    }
+
+    public function attributes(): array
+    {
+        return [
+            'work-start'         => '出勤時間',
+            'work-end'           => '退勤時間',
+            'clock_in_at'        => '出勤時間',
+            'clock_out_at'       => '退勤時間',
+            'breaks.*.start'     => '休憩開始',
+            'breaks.*.end'       => '休憩終了',
+            'remarks'            => '備考',
+        ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $norm = fn($v) => $v === '' ? null : $v;
+
+        $this->merge([
+            'work-start'   => $norm($this->input('work-start')),
+            'work-end'     => $norm($this->input('work-end')),
+            'clock_in_at'  => $norm($this->input('clock_in_at')),
+            'clock_out_at' => $norm($this->input('clock_out_at')),
+        ]);
+
+        $breaks = $this->input('breaks', []);
+        foreach ($breaks as $i => $row) {
+            $row['start'] = $norm($row['start'] ?? null);
+            $row['end']   = $norm($row['end']   ?? null);
+            $breaks[$i]   = $row;
+        }
+        $this->merge(['breaks' => $breaks]);
     }
 
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $v) {
             $attendanceId = $this->route('id');
-            $attendance = Attendance::find($attendanceId);
+            $attendance   = Attendance::find($attendanceId);
+
             if (!$attendance) {
-                $v->errors()->add('id', '勤怠が見つかりませんでした。');
+                $v->errors()->add('form', '勤怠が見つかりませんでした。');
                 return;
             }
 
-            $base = $attendance->work_date ? Carbon::parse($attendance->work_date)->startOfDay() : null;
+            $base = $attendance->work_date
+                ? Carbon::parse($attendance->work_date)->startOfDay()
+                : Carbon::now()->startOfDay();
+
             $toCarbon = function (?string $hhmm) use ($base) {
                 if (!$base || !$hhmm) return null;
-                [$h, $m] = array_map('intval', explode(':', $hhmm));
-                return $base->copy()->setTime($h, $m, 0);
+                try {
+                    [$h, $m] = array_map('intval', explode(':', $hhmm));
+                    return $base->copy()->setTime($h, $m, 0);
+                } catch (\Throwable $e) {
+                    return null;
+                }
             };
 
             $inStr  = $this->input('clock_in_at')  ?? $this->input('work-start');
@@ -63,49 +111,37 @@ class UpdateAttendanceRequest extends FormRequest
             $cin  = $toCarbon($inStr);
             $cout = $toCarbon($outStr);
 
+
             if ($cin && $cout && $cin->gte($cout)) {
-                $v->errors()->add('work-start', '出勤は退勤より前である必要があります');
-                $v->errors()->add('work-end',   '退勤は出勤より後である必要があります');
+                $v->errors()->add('work-start', '出勤時間もしくは退勤時間が不適切な値です');
+                $v->errors()->add('work-end',   '出勤時間もしくは退勤時間が不適切な値です');
             }
 
-            $rows = collect($this->input('breaks', []))
-                ->map(fn($r) => [
+            $rows = collect($this->input('breaks', []))->values();
+
+            $normalized = $rows->map(function ($r) use ($toCarbon) {
+                return [
                     'start_raw' => $r['start'] ?? null,
                     'end_raw'   => $r['end'] ?? null,
-                ]);
-
-            foreach ($rows as $idx => $r) {
-                $hasStart = !empty($r['start_raw']);
-                $hasEnd   = !empty($r['end_raw']);
-                if ($hasStart xor $hasEnd) {
-                    $v->errors()->add("breaks.$idx.start", '休憩は開始と終了を両方入力してください');
-                    $v->errors()->add("breaks.$idx.end",   '休憩は開始と終了を両方入力してください');
-                }
-            }
-
-            $normalized = $rows
-                ->filter(fn($r) => !empty($r['start_raw']) && !empty($r['end_raw']))
-                ->map(fn($r) => [
-                    'start' => $toCarbon($r['start_raw']),
-                    'end'   => $toCarbon($r['end_raw']),
-                ])
-                ->values();
+                    'start'     => $toCarbon($r['start'] ?? null),
+                    'end'       => $toCarbon($r['end'] ?? null),
+                ];
+            })->filter(fn($r) => $r['start'] && $r['end'])->values();
 
             foreach ($normalized as $idx => $r) {
-                if ($r['start'] && $r['end'] && $r['start']->gte($r['end'])) {
-                    $v->errors()->add("breaks.$idx.start", '休憩の開始は終了より前である必要があります');
-                    $v->errors()->add("breaks.$idx.end",   '休憩の終了は開始より後である必要があります');
+                if ($cin && $r['start'] && $r['start']->lt($cin)) {
+                    $v->errors()->add("breaks.$idx.start", '休憩時間が不適切な値です');
                 }
-            }
+                if ($cout && $r['start'] && $r['start']->gt($cout)) {
+                    $v->errors()->add("breaks.$idx.start", '休憩時間が不適切な値です');
+                }
+                if ($cout && $r['end'] && $r['end']->gt($cout)) {
+                    $v->errors()->add("breaks.$idx.end", '休憩時間もしくは退勤時間が不適切な値です');
+                }
+                if ($r['start'] && $r['end'] && $r['start']->gte($r['end'])) {
 
-            if ($cin && $cout) {
-                foreach ($normalized as $idx => $r) {
-                    if ($r['start'] && $r['start']->lt($cin)) {
-                        $v->errors()->add("breaks.$idx.start", '休憩開始が勤務時間外です');
-                    }
-                    if ($r['end'] && $r['end']->gt($cout)) {
-                        $v->errors()->add("breaks.$idx.end", '休憩終了が勤務時間外です');
-                    }
+                    $v->errors()->add("breaks.$idx.start", '休憩時間が不適切な値です');
+                    $v->errors()->add("breaks.$idx.end",   '休憩時間が不適切な値です');
                 }
             }
 
@@ -113,9 +149,9 @@ class UpdateAttendanceRequest extends FormRequest
             for ($i = 1; $i < $sorted->count(); $i++) {
                 $prev = $sorted[$i - 1];
                 $curr = $sorted[$i];
-                if ($prev['end'] && $curr['start'] && $prev['end']->gt($curr['start'])) {
-                    $v->errors()->add("breaks." . ($i - 1) . ".end", '休憩時間が他の休憩と重複しています');
-                    $v->errors()->add("breaks.$i.start",             '休憩時間が他の休憩と重複しています');
+                if ($prev['end']->gt($curr['start'])) {
+                    $v->errors()->add("breaks." . ($i - 1) . ".end", '休憩時間が不適切な値です');
+                    $v->errors()->add("breaks.$i.start",             '休憩時間が不適切な値です');
                 }
             }
         });

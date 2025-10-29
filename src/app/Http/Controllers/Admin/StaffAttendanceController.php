@@ -2,70 +2,96 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\StaffMonthQueryRequest;
+use App\Http\Requests\Admin\StaffAttendanceCsvRequest;
 use App\Models\User;
 use App\Models\Attendance;
-use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Response;
 use Carbon\Carbon;
-
 
 class StaffAttendanceController extends Controller
 {
-    public function index(Request $request, $id)
+    public function index(StaffMonthQueryRequest $request, $id)
     {
-        $ym = $request->query('ym', '');
-        if ($ym && preg_match('/^\d{4}-\d{2}$/', $ym)) {
-            try {
-                $target_month = Carbon::createFromFormat('Y-m', $ym);
-            } catch (\Exception $e) {
-                $target_month = Carbon::now()->startOfMonth();
-            }
-        } else {
-            $target_month = Carbon::now()->startOfMonth();
-        }
-        $dailyRows = [];
-        $current_year_month = $target_month->format('Y/m');
-        $start_date = $target_month->copy()->startOfMonth();
-        $last_date = $target_month->copy()->lastOfMonth();
-        $prevYm = $target_month->copy()->subMonths(1)->format('Y-m');
-        $nextYm = $target_month->copy()->addMonth()->format('Y-m');
-        $user = User::findOrFail($id);
-        $attendances = Attendance::with('breaks')
-            ->where('user_id', $user->id)
-            ->whereBetween('work_date', [$start_date, $last_date])
+        $validated   = $request->validated();
+        $ym          = $validated['ym'];
+        $targetMonth = Carbon::createFromFormat('Y-m', $ym)->startOfMonth();
+
+        $user  = User::findOrFail($id);
+        $start = $targetMonth->copy()->startOfMonth();
+        $end   = $targetMonth->copy()->endOfMonth();
+
+        $rows = Attendance::where('user_id', $user->id)
+            ->whereBetween('work_date', [$start->toDateString(), $end->toDateString()])
+            ->orderBy('work_date')
+            ->orderBy('id')
             ->get();
-        foreach ($attendances as $attendance) {
-            $clock_in = $attendance->clock_in_at;
-            $clock_out = $attendance->clock_out_at;
-            $break_seconds_total = 0;
-            foreach ($attendance->breaks as $br) {
-                if ($br->break_started_at && $br->break_ended_at) {
-                    $break_seconds_total += $br->break_ended_at->diffInSeconds($br->break_started_at);
-                }
-            }
-            $break_minutes_rounded = round($break_seconds_total / 60);
 
-            $work_minutes_rounded = 0;
-            if ($clock_in && $clock_out) {
-                $gross_second = $clock_out->diffInSeconds($clock_in);
-                $work_second = max(0, $gross_second - $break_seconds_total);
-                $work_minutes_rounded = round($work_second / 60);
-            }
-            $break_hours = floor($break_minutes_rounded / 60);
-            $break_minutes = $break_minutes_rounded % 60;
-            $work_hours = floor($work_minutes_rounded / 60);
-            $work_minutes = $work_minutes_rounded % 60;
+        $current_year_month = $targetMonth->format('Y/m');
+        $prevYm = $targetMonth->copy()->subMonth()->format('Y-m');
+        $nextYm = $targetMonth->copy()->addMonth()->format('Y-m');
 
-            $display = [
-                'id' => $attendance->id,
-                'date' => $attendance->work_date->isoFormat('MM/DD(ddd)'),
-                'clock_in' => $clock_in ? $clock_in->format('H:i') : '',
-                'clock_out' => $clock_out ? $clock_out->format('H:i') : '',
-                'break_total' => sprintf('%d:%02d', $break_hours, $break_minutes),
-                'work_total' => sprintf('%d:%02d', $work_hours, $work_minutes),
-            ];
-            $dailyRows[] = $display;
+        return view('admin.staff_attendances.index', compact(
+            'user',
+            'rows',
+            'current_year_month',
+            'prevYm',
+            'nextYm'
+        ));
+    }
+
+    public function csv(StaffAttendanceCsvRequest $request)
+    {
+        $v  = $request->validated();
+        $id = (int)$v['user_id'];
+        $ym = $v['ym'];
+
+        $targetMonth = Carbon::createFromFormat('Y-m', $ym)->startOfMonth();
+        $user  = User::findOrFail($id);
+        $start = $targetMonth->copy()->startOfMonth()->toDateString();
+        $end   = $targetMonth->copy()->endOfMonth()->toDateString();
+
+        $rows = Attendance::where('user_id', $user->id)
+            ->whereBetween('work_date', [$start, $end])
+            ->orderBy('work_date')
+            ->orderBy('id')
+            ->get();
+
+        $headers = [
+            '日付',
+            '出勤',
+            '退勤',
+            '休憩（複数は;区切り）',
+            '備考'
+        ];
+
+        $lines = [];
+        $lines[] = implode(',', $headers);
+
+        foreach ($rows as $row) {
+            $breaks = $row->breaks()->orderBy('break_started_at')->get()
+                ->map(function ($b) {
+                    $s = $b->break_started_at ? Carbon::parse($b->break_started_at)->format('H:i') : '';
+                    $e = $b->break_ended_at ? Carbon::parse($b->break_ended_at)->format('H:i') : '';
+                    return trim($s . '-' . $e, '-');
+                })->filter()->implode(';');
+
+            $lines[] = implode(',', [
+                $row->work_date ? Carbon::parse($row->work_date)->format('Y-m-d') : '',
+                $row->clock_in_at ? Carbon::parse($row->clock_in_at)->format('H:i') : '',
+                $row->clock_out_at ? Carbon::parse($row->clock_out_at)->format('H:i') : '',
+                $breaks,
+                str_replace(["\r", "\n", ","], [' ', ' ', ' '], (string)$row->remarks),
+            ]);
         }
-        return view('admin.staff-attendances.index', compact('dailyRows', 'user', 'current_year_month', 'prevYm', 'nextYm'));
+
+        $csv = implode("\n", $lines);
+        $filename = sprintf('attendance_%s_%s.csv', $user->id, $targetMonth->format('Ym'));
+
+        return Response::make($csv, 200, [
+            'Content-Type'        => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+        ]);
     }
 }

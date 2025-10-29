@@ -9,19 +9,20 @@ use Illuminate\Foundation\Auth\EmailVerificationRequest;
 use Illuminate\Http\Request;
 
 
+Route::redirect('/', '/login');
 
 require __DIR__ . '/admin.php';
 
 
-Route::get('/attendance', [AttendancesController::class, 'create'])->name('attendance.create')->middleware(['auth', 'verified','ensure.nonAdmin']);
+Route::get('/attendance', [AttendancesController::class, 'create'])->name('attendance.create')->middleware(['auth', 'verified', 'ensure.nonAdmin']);
 
-Route::post('/attendance', [AttendancesController::class, 'store'])->name('attendance.store')->middleware(['auth','verified','ensure.nonAdmin']);
+Route::post('/attendance', [AttendancesController::class, 'store'])->name('attendance.store')->middleware(['auth', 'verified', 'ensure.nonAdmin']);
 
-Route::get('/attendance/list', [AttendancesController::class, 'index'])->name('attendance.index')->middleware(['auth', 'verified','ensure.nonAdmin']);
+Route::get('/attendance/list', [AttendancesController::class, 'index'])->name('attendance.index')->middleware(['auth', 'verified', 'ensure.nonAdmin']);
 
-Route::get('/attendance/detail/{id}', [AttendancesController::class, 'show'])->name('attendance.show')->middleware(['auth', 'verified','ensure.nonAdmin']);
+Route::get('/attendance/detail/{id}', [AttendancesController::class, 'show'])->name('attendance.show')->middleware(['auth', 'verified', 'ensure.nonAdmin']);
 
-Route::post('/attendance/{attendance}/corrections', [AttendancesController::class, 'submitCorrection'])->name('attendance.corrections.submit')->middleware(['auth', 'verified','ensure.nonAdmin']);
+Route::post('/attendance/{attendance}/corrections', [AttendancesController::class, 'submitCorrection'])->name('attendance.corrections.submit')->middleware(['auth', 'verified', 'ensure.nonAdmin']);
 
 Route::get('/stamp_correction_request/list', [ApprovalsController::class, 'index'])->name('approvals.index')->middleware(['auth', 'verified',]);
 

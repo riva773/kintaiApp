@@ -8,11 +8,19 @@
 <div class="container">
     <div class="index-container">
         <h1 class="attendance-index-title">{{ $user->name }}さんの勤怠</h1>
+
         <div class="select-month">
-            <a class="prev-year-month" href="{{ route('admin.staff.attendance.index',['ym' => $prevYm ,'id' => $user->id]) }}"><i class="fa-solid fa-arrow-left"></i>前月</a>
-            <p class="current-year-month"><i class="fa-solid fa-calendar-days"></i>{{ $current_year_month }}</p>
-            <a class="next-year-month" href="{{ route('admin.staff.attendance.index',['ym' => $nextYm,'id' => $user->id]) }}">翌月<i class=" fa-solid fa-arrow-right"></i></a>
+            <a class="prev-year-month" href="{{ route('admin.staff.attendance.index', ['ym' => $prevYm ,'id' => $user->id]) }}">
+                <i class="fa-solid fa-arrow-left"></i>前月
+            </a>
+            <p class="current-year-month">
+                <i class="fa-solid fa-calendar-days"></i>{{ $current_year_month }}
+            </p>
+            <a class="next-year-month" href="{{ route('admin.staff.attendance.index', ['ym' => $nextYm,'id' => $user->id]) }}">
+                翌月<i class="fa-solid fa-arrow-right"></i>
+            </a>
         </div>
+
         <div class="attendance-table-container">
             <table class="attendance-table">
                 <thead>
@@ -28,24 +36,29 @@
                 <tbody>
                     @foreach($dailyRows as $dailyRow)
                     <tr class="attendance-table-row">
-                        <td>{{ $dailyRow['date']}}</td>
-                        <td>{{ $dailyRow['clock_in']}}</td>
-                        <td>{{ $dailyRow['clock_out']}}</td>
-                        <td>{{ $dailyRow['break_total']}}</td>
-                        <td>{{ $dailyRow['work_total']}}</td>
-                        <td><a href="{{ route('admin.attendance.show',['id' => $dailyRow['id']]) }}" class="detail-link">詳細</a></td>
+                        <td>{{ $dailyRow['date'] }}</td>
+                        <td>{{ $dailyRow['clock_in'] }}</td>
+                        <td>{{ $dailyRow['clock_out'] }}</td>
+                        <td>{{ $dailyRow['break_total'] }}</td>
+                        <td>{{ $dailyRow['work_total'] }}</td>
+                        <td>
+                            @if(!empty($dailyRow['id']))
+                            <a href="{{ route('admin.attendance.show', ['id' => $dailyRow['id']]) }}" class="detail-link">詳細</a>
+                            @else
+                            <span class="detail-link disabled" aria-disabled="true">詳細</span>
+                            @endif
+                        </td>
                     </tr>
                     @endforeach
                 </tbody>
             </table>
         </div>
+
         <div class="actions">
-            <a class="csv-btn" href="{{ route('admin.staff.attendance.csv', ['id' => $user->id,
-            'ym' => request('ym', now()->format('Y-m'))]) }}">
+            <a class="csv-btn" href="{{ route('admin.staff.attendance.csv', ['id' => $user->id, 'ym' => request('ym', now()->format('Y-m'))]) }}">
                 CSV出力
             </a>
         </div>
     </div>
 </div>
-
 @endsection

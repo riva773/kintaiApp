@@ -3,123 +3,120 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
-use App\Models\Attendance;
-use App\Models\AttendanceApproval;
+use Illuminate\Validation\Validator;
+use Carbon\Carbon;
 
 class SubmitCorrectionRequest extends FormRequest
 {
-    /**
-     * Determine if the user is authorized to make this request.
-     *
-     * @return bool
-     */
-    public function authorize()
+    public function authorize(): bool
     {
-        if (!auth()->check()) {
-            return false;
-        }
-        $attendance = $this->route('attendance');
-        if (!$attendance instanceof Attendance) {
-            return false;
-        }
-        if ($attendance->user_id !== auth()->id()) {
-            return false;
-        }
-
-        $hasPending = AttendanceApproval::where('attendance_id', $attendance->id)->where('status', 'pending')
-            ->exists();
-        if ($hasPending) {
-            return false;
-        }
-
         return true;
     }
 
-    public function rules()
+    public function rules(): array
     {
         return [
-            'proposed_remarks' => ['required', 'string'],
-            'work-start' => ['nullable', 'date_format:H:i'],
-            'work-end'   => ['nullable', 'date_format:H:i'],
-            'breaks'                 => ['nullable', 'array'],
-            'breaks.*.start'         => ['nullable', 'date_format:H:i'],
-            'breaks.*.end'           => ['nullable', 'date_format:H:i'],
+            'work-start'         => ['nullable', 'date_format:H:i'],
+            'work-end'           => ['nullable', 'date_format:H:i'],
+            'breaks'             => ['nullable', 'array'],
+            'breaks.*.start'     => ['nullable', 'date_format:H:i'],
+            'breaks.*.end'       => ['nullable', 'date_format:H:i'],
+            'proposed_remarks'   => ['required', 'string', 'max:255'],
         ];
     }
 
-    public function messages()
+    public function messages(): array
     {
         return [
-            'proposed_remarks.required' => '備考を記入してください',
-            'work-start.date_format'    => '出勤時間もしくは退勤時間が不適切な値です',
-            'work-end.date_format'      => '出勤時間もしくは退勤時間が不適切な値です',
-            'breaks.*.start.date_format' => '休憩時間が不適切な値です',
-            'breaks.*.end.date_format'  => '休憩時間が不適切な値です',
+            'work-start.date_format'        => '出勤時間もしくは退勤時間が不適切な値です',
+            'work-end.date_format'          => '出勤時間もしくは退勤時間が不適切な値です',
+            'breaks.*.start.date_format'    => '休憩時間が不適切な値です',
+            'breaks.*.end.date_format'      => '休憩時間が不適切な値です',
+            'proposed_remarks.required'     => '備考を記入してください',
+            'proposed_remarks.max'          => '備考を記入してください',
         ];
     }
 
-
-
-
-    public function withValidator($validator): void
+    public function attributes(): array
     {
-        $validator->after(function ($v) {
+        return [
+            'work-start'              => '出勤時間',
+            'work-end'                => '退勤時間',
+            'breaks.*.start'          => '休憩開始',
+            'breaks.*.end'            => '休憩終了',
+            'proposed_remarks'        => '備考',
+        ];
+    }
 
+    protected function prepareForValidation(): void
+    {
+        $norm = fn($v) => $v === '' ? null : $v;
+
+        $this->merge([
+            'work-start'       => $norm($this->input('work-start')),
+            'work-end'         => $norm($this->input('work-end')),
+            'proposed_remarks' => $this->input('proposed_remarks'),
+        ]);
+
+        $breaks = $this->input('breaks', []);
+        foreach ($breaks as $i => $row) {
+            $row['start'] = $norm($row['start'] ?? null);
+            $row['end']   = $norm($row['end']   ?? null);
+            $breaks[$i]   = $row;
+        }
+        $this->merge(['breaks' => $breaks]);
+    }
+
+    public function withValidator($validator)
+    {
+        $validator->after(function (Validator $v) {
             $attendance = $this->route('attendance');
+            $baseDate   = $attendance?->work_date instanceof Carbon
+                ? $attendance->work_date->copy()->startOfDay()
+                : Carbon::now()->startOfDay();
 
-            $current_ws = $attendance?->clock_in_at?->format('H:i');
-            $current_we = $attendance?->clock_out_at?->format('H:i');
+            $toC = function (?string $hhmm) use ($baseDate) {
+                if (!$baseDate || !$hhmm) return null;
+                try {
+                    [$h, $m] = array_map('intval', explode(':', $hhmm));
+                    return $baseDate->copy()->setTime($h, $m, 0);
+                } catch (\Throwable $e) {
+                    return null;
+                }
+            };
 
-            $proposed_ws = $this->input('work-start');
-            $proposed_we = $this->input('work-end');
+            $effIn  = $toC($this->input('work-start')) ?? $attendance?->clock_in_at;
+            $effOut = $toC($this->input('work-end'))   ?? $attendance?->clock_out_at;
 
-            $ws_resolved = $proposed_ws ?? $current_ws;
-            $we_resolved = $proposed_we ?? $current_we;
-
-            if ($ws_resolved && $we_resolved && $this->toMinutes($ws_resolved) > $this->toMinutes($we_resolved)) {
-                $v->errors()->add('work-start', '出勤時間が不適切な値です');
+            if ($effIn && $effOut && $effIn->gte($effOut)) {
+                $v->errors()->add('work-start', '出勤時間もしくは退勤時間が不適切な値です');
+                $v->errors()->add('work-end',   '出勤時間もしくは退勤時間が不適切な値です');
             }
 
             $breaks = $this->input('breaks', []);
-            foreach ($breaks as $i => $b) {
-                $bs = $b['start'] ?? null;
-                $be = $b['end'] ?? null;
+            foreach ($breaks as $i => $row) {
+                $bs = $toC($row['start'] ?? null);
+                $be = $toC($row['end']   ?? null);
 
-                if ($bs && $be && $this->toMinutes($bs) > $this->toMinutes($be)) {
-                    $v->errors()->add("breaks.$i.end", '休憩時間が不適切な値です');
+                if (!$bs && !$be) continue;
+
+                if ($bs && $be && $bs->gte($be)) {
+                    $v->errors()->add("breaks.$i.start", '休憩時間が不適切な値です');
+                    $v->errors()->add("breaks.$i.end",   '休憩時間が不適切な値です');
                 }
 
-                if ($bs && $we_resolved && $this->toMinutes($bs) > $this->toMinutes($we_resolved)) {
-                    $v->errors()->add("breaks.$i.start", '休憩時間もしくは退勤時間が不適切な値です');
-                }
-
-                if ($be && $we_resolved && $this->toMinutes($be) > $this->toMinutes($we_resolved)) {
-                    $v->errors()->add("breaks.$i.end", '休憩時間もしくは退勤時間が不適切な値です');
-                }
-
-                if ($bs && $ws_resolved && $this->toMinutes($bs) < $this->toMinutes($ws_resolved)) {
+                if ($effIn && $bs && $bs->lt($effIn)) {
                     $v->errors()->add("breaks.$i.start", '休憩時間が不適切な値です');
                 }
-            }
-            if (!$proposed_ws && !$proposed_we && !$this->hasAnyBreakInput($breaks)) {
-                $v->errors()->add('proposed_remarks', '修正内容がありません。いずれかの項目を入力してください');
+
+                if ($effOut && $bs && $bs->gt($effOut)) {
+                    $v->errors()->add("breaks.$i.start", '休憩時間が不適切な値です');
+                }
+
+                if ($effOut && $be && $be->gt($effOut)) {
+                    $v->errors()->add("breaks.$i.end", '休憩時間もしくは退勤時間が不適切な値です');
+                }
             }
         });
-    }
-
-    private function toMinutes(string $hhmm): int
-    {
-        [$h, $m] = array_map('intval', explode(':', $hhmm));
-        return $h * 60 + $m;
-    }
-
-    private function hasAnyBreakInput($breaks)
-    {
-        foreach ($breaks as $b) {
-            if (!empty($b['start']) || !empty($b['end'])) {
-                return true;
-            }
-        }
-        return false;
     }
 }

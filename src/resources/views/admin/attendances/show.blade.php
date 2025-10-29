@@ -144,7 +144,7 @@
 
             <div class="row row-remarks row-single">
                 <p class="label">備考</p>
-                <textarea name="remarks" class="data input value-full" rows="2" placeholder="変更理由を記載してください（必須）">{{ old('remarks', $attendance->remarks) }}</textarea>
+                <textarea name="remarks" class="data input value-full" rows="2" >{{ old('remarks', $attendance->remarks) }}</textarea>
             </div>
         </div>
         <div class="btn">
