@@ -11,7 +11,7 @@ use App\Http\Controllers\Admin\StaffAttendanceCsvController;
 
 Route::prefix('admin')
     ->name('admin.')
-    ->middleware(['auth', EnsureAdmin::class])
+    ->middleware(['auth', EnsureAdmin::class, 'verified'])
     ->group(function () {
         Route::get('/attendance/list', [AttendanceController::class, 'index'])->name('attendance.index');
         Route::get('/attendance/{id}', [AttendanceController::class, 'show'])->name('attendance.show');
