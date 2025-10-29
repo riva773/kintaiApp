@@ -62,3 +62,6 @@ MAIL_FROM_NAME="Kintai App"
 - スタッフ別勤怠一覧画面 /admin/attendance/staff/{id}
 - 申請一覧画面 /stamp_correction_request/list
 - 修正申請承認画面 /stamp_correction_request/approve/{attendance_correct_request}
+
+## ER図
+<img width="1453" height="1288" alt="Image" src="https://github.com/user-attachments/assets/8c9b58bd-8a15-4f3b-b9c0-1ab442ad1a17" />
