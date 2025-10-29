@@ -7,9 +7,9 @@ cp src/.env.example src/.env
 # 以降の「.env 設定」を参考に、DB とメール(MailHog)の値を確認/調整してください
 
 docker compose up -d --build
-docker compose exec app composer install
-docker compose exec app php artisan key:generate
-docker compose exec app php artisan migrate --seed
+docker compose exec php composer install
+docker compose exec php php artisan key:generate
+docker compose exec php php artisan migrate --seed
 ```
 
 ## .env 設定
