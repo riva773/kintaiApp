@@ -6,27 +6,20 @@ use Illuminate\Support\Facades\Schema;
 
 class AddEmailVerifiedAt extends Migration
 {
-    /**
-     * Run the migrations.
-     *
-     * @return void
-     */
     public function up()
     {
-        Schema::table('users', function (Blueprint $table) {
-            $table->timestamp('email_verified_at')->nullable()->after('email');
-        });
+        if (!Schema::hasColumn('users', 'email_verified_at')) {
+            Schema::table('users', function (Blueprint $table) {
+                $table->timestamp('email_verified_at')->nullable()->after('email');
+            });
+        }
     }
-
-    /**
-     * Reverse the migrations.
-     *
-     * @return void
-     */
     public function down()
     {
-        Schema::table('users', function (Blueprint $table) {
-            $table->dropColumn('email_verified_at');
-        });
+        if (Schema::hasColumn('users', 'email_verified_at')) {
+            Schema::table('users', function (Blueprint $table) {
+                $table->dropColumn('email_verified_at');
+            });
+        }
     }
 }

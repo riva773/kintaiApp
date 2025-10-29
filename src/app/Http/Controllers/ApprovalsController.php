@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use App\Models\Attendance;
 use App\Models\AttendanceApproval;
 
 class ApprovalsController extends Controller
@@ -12,7 +13,7 @@ class ApprovalsController extends Controller
     {
         $user = $request->user();
 
-        if ($user->role === 'admin') {
+        if ($user && $user->role === 'admin') {
             return $this->indexForAdmin($request);
         } else {
             return $this->indexForGeneral($request);
@@ -51,15 +52,14 @@ class ApprovalsController extends Controller
         return view('approvals.index', compact('approvals', 'user', 'status'));
     }
 
-    public function show(AttendanceApproval $attendance_correct_request)
+    public function show($id)
     {
-        $attendance_correct_request->load([
+        $approval = AttendanceApproval::with([
             'attendance.user',
             'attendance.breaks' => fn($q) => $q->orderBy('break_started_at')->orderBy('id'),
-            'breaks' => fn($q) => $q->orderBy('proposed_break_started_at')->orderBy('id'),
-        ]);
+            'breaks'            => fn($q) => $q->orderBy('proposed_break_started_at')->orderBy('id'),
+        ])->findOrFail($id);
 
-        $approval   = $attendance_correct_request;
         $attendance = $approval->attendance;
         $user       = $attendance->user;
 
@@ -70,19 +70,15 @@ class ApprovalsController extends Controller
             : ($attendance->remarks ?? null);
 
         if ($approval->breaks->isNotEmpty()) {
-            $resolved_breaks = $approval->breaks->map(function ($br) {
-                return [
-                    'start' => $br->proposed_break_started_at,
-                    'end'   => $br->proposed_break_ended_at,
-                ];
-            });
+            $resolved_breaks = $approval->breaks->map(fn($br) => [
+                'start' => $br->proposed_break_started_at,
+                'end'   => $br->proposed_break_ended_at,
+            ]);
         } else {
-            $resolved_breaks = $attendance->breaks->map(function ($br) {
-                return [
-                    'start' => $br->break_started_at,
-                    'end'   => $br->break_ended_at,
-                ];
-            });
+            $resolved_breaks = $attendance->breaks->map(fn($br) => [
+                'start' => $br->break_started_at,
+                'end'   => $br->break_ended_at,
+            ]);
         }
 
         $is_pending = ($approval->status === 'pending');
@@ -99,54 +95,59 @@ class ApprovalsController extends Controller
         ));
     }
 
-    public function approve(Request $request, AttendanceApproval $attendance_correct_request)
+    public function approve(Request $request, $id)
     {
-        if ($attendance_correct_request->status !== 'pending') {
+        $approval = AttendanceApproval::with([
+            'attendance',
+            'breaks' => fn($q) => $q->orderBy('proposed_break_started_at')->orderBy('id')
+        ])->findOrFail($id);
+
+        if ($approval->status !== 'pending') {
             return redirect()
-                ->route('approvals.show', ['attendance_correct_request' => $attendance_correct_request])
+                ->route('admin.approvals.show', ['id' => $approval->id])
                 ->with('status', 'この申請は既に処理済みです。');
         }
 
-        $attendance_correct_request->load([
-            'attendance',
-            'breaks' => fn($q) => $q->orderBy('proposed_break_started_at')->orderBy('id')
-        ]);
+        DB::transaction(function () use ($approval) {
+            $attendance = $approval->attendance()->lockForUpdate()->firstOrFail();
 
-        DB::transaction(function () use ($attendance_correct_request) {
-            $attendance = $attendance_correct_request->attendance()->lockForUpdate()->first();
-
-            if (!is_null($attendance_correct_request->proposed_clock_in_at)) {
-                $attendance->clock_in_at = $attendance_correct_request->proposed_clock_in_at;
+            if (!is_null($approval->proposed_clock_in_at)) {
+                $attendance->clock_in_at = $approval->proposed_clock_in_at;
             }
-            if (!is_null($attendance_correct_request->proposed_clock_out_at)) {
-                $attendance->clock_out_at = $attendance_correct_request->proposed_clock_out_at;
+            if (!is_null($approval->proposed_clock_out_at)) {
+                $attendance->clock_out_at = $approval->proposed_clock_out_at;
             }
-            if (!is_null($attendance_correct_request->proposed_remarks)) {
-                $attendance->remarks = $attendance_correct_request->proposed_remarks;
+            if (!is_null($approval->proposed_remarks)) {
+                $attendance->remarks = $approval->proposed_remarks;
             }
             $attendance->save();
 
-            if ($attendance_correct_request->breaks->isNotEmpty()) {
+            if ($approval->breaks->isNotEmpty()) {
                 $attendance->breaks()->delete();
-                foreach ($attendance_correct_request->breaks as $ap_break) {
+
+                $seq = 1;
+                foreach ($approval->breaks as $ap_break) {
                     $start = $ap_break->proposed_break_started_at;
                     $end   = $ap_break->proposed_break_ended_at;
+
                     if (is_null($start)) {
-                        continue; 
+                        continue;
                     }
+
                     $attendance->breaks()->create([
+                        'sequence_no'      => $seq++,
                         'break_started_at' => $start,
                         'break_ended_at'   => $end,
                     ]);
                 }
             }
 
-            $attendance_correct_request->status = 'approved';
-            $attendance_correct_request->save();
+            $approval->status = 'approved';
+            $approval->save();
         });
 
         return redirect()
-            ->route('approvals.show', ['attendance_correct_request' => $attendance_correct_request])
+            ->route('admin.approvals.show', ['id' => $approval->id])
             ->with('status', '申請を承認し、勤怠に反映しました。');
     }
 }

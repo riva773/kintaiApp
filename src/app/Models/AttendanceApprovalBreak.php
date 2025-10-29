@@ -23,5 +23,6 @@ class AttendanceApprovalBreak extends Model
         'sequence_no',
         'proposed_break_started_at',
         'proposed_break_ended_at',
+        'attendance_approval_id',
     ];
 }

@@ -48,6 +48,7 @@ body {
     border-collapse: separate;
     border-spacing: 0 4px;
     border-radius: 10px;
+    margin-bottom: 30px;
 }
 
 .attendance-table-row {
@@ -64,5 +65,21 @@ th,td {
 
 .detail-link {
     color: #000;
+    text-decoration: none;
+}
+
+.actions {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.csv-btn {
+    background-color: #000;
+    color: #fff;
+    font-size: 22px;
+    font-weight: bold;
+    padding: 8px 30px;
+    border-radius: 4px;
+    cursor: pointer;
     text-decoration: none;
 }

@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
+
 class Attendance extends Model
 {
     use HasFactory;
@@ -16,7 +17,7 @@ class Attendance extends Model
 
     public function breaks()
     {
-        return $this->hasMany(WorkBreak::class);
+        return $this->hasMany(WorkBreak::class)->orderBy('sequence_no');
     }
 
     public function approvals()

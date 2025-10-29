@@ -141,8 +141,15 @@
                     class="data input"
                     value="{{ old("breaks.$next.end") }}" placeholder="-">
             </div>
+
+            <div class="row row-remarks row-single">
+                <p class="label">備考</p>
+                <textarea name="remarks" class="data input value-full" rows="2" placeholder="変更理由を記載してください（必須）">{{ old('remarks', $attendance->remarks) }}</textarea>
+            </div>
         </div>
-        <button type="submit" class="btn-edit">修正</button>
+        <div class="btn">
+            <button type="submit" class="btn-edit">修正</button>
+        </div>
     </form>
     @endif
 </div>

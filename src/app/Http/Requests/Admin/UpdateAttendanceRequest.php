@@ -21,16 +21,22 @@ class UpdateAttendanceRequest extends FormRequest
             'work-end'   => ['nullable', 'regex:/^\d{2}:\d{2}$/'],
             'breaks.*.start' => ['nullable', 'regex:/^\d{2}:\d{2}$/'],
             'breaks.*.end'   => ['nullable', 'regex:/^\d{2}:\d{2}$/'],
+            'clock_in_at'     => ['nullable', 'regex:/^\d{2}:\d{2}$/'],
+            'clock_out_at'    => ['nullable', 'regex:/^\d{2}:\d{2}$/'],
+            'remarks'         => ['required', 'string', 'max:255'],
         ];
     }
 
     public function messages(): array
     {
         return [
-            'work-start.regex'     => '出勤時間が不適切な値です（HH:MM）',
-            'work-end.regex'       => '退勤時間が不適切な値です（HH:MM）',
-            'breaks.*.start.regex' => '休憩開始が不適切な値です（HH:MM）',
-            'breaks.*.end.regex'   => '休憩終了が不適切な値です（HH:MM）',
+            'work-start.regex'        => '出勤時間が不適切な値です（HH:MM）',
+            'work-end.regex'          => '退勤時間が不適切な値です（HH:MM）',
+            'breaks.*.start.regex'    => '休憩開始が不適切な値です（HH:MM）',
+            'breaks.*.end.regex'      => '休憩終了が不適切な値です（HH:MM）',
+            'clock_in_at.regex'       => '出勤時間が不適切な値です（HH:MM）',
+            'clock_out_at.regex'      => '退勤時間が不適切な値です（HH:MM）',
+            'remarks.required'        => '備考は必須です（変更理由を記載してください）',
         ];
     }
 
@@ -51,8 +57,11 @@ class UpdateAttendanceRequest extends FormRequest
                 return $base->copy()->setTime($h, $m, 0);
             };
 
-            $cin  = $toCarbon($this->input('work-start'));
-            $cout = $toCarbon($this->input('work-end'));
+            $inStr  = $this->input('clock_in_at')  ?? $this->input('work-start');
+            $outStr = $this->input('clock_out_at') ?? $this->input('work-end');
+
+            $cin  = $toCarbon($inStr);
+            $cout = $toCarbon($outStr);
 
             if ($cin && $cout && $cin->gte($cout)) {
                 $v->errors()->add('work-start', '出勤は退勤より前である必要があります');

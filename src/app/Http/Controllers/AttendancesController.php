@@ -10,93 +10,158 @@ use Illuminate\Http\Request;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 
 class AttendancesController extends Controller
 {
     public function create()
     {
-        $now = Carbon::now();
-        $now_date = $now->format(('Y-m-d'));
-        $time = $now->format('H:i');
-        $status = Attendance::where('user_id', auth()->id())->where('work_date', $now_date)->value('status');
-        if ($status === null) {
-            $status = 'not_working';
+        $now   = Carbon::now();
+        $time  = $now->format('H:i');
+        $today = $now->toDateString();
+
+        $attendance = Attendance::with(['breaks' => function ($q) {
+            $q->orderByDesc('break_started_at')->orderByDesc('id');
+        }])
+            ->where('user_id', auth()->id())
+            ->whereDate('work_date', $today)
+            ->latest('id')
+            ->first();
+
+        $hasOpenBreak = false;
+        $uiStatus     = 'not_working';
+
+        if ($attendance) {
+            $hasOpenBreak = $attendance->breaks()->whereNull('break_ended_at')->exists();
+
+            if ($attendance->clock_out_at) {
+                $uiStatus = 'finished';
+            } elseif ($hasOpenBreak) {
+                $uiStatus = 'on_break';
+            } elseif ($attendance->clock_in_at) {
+                $uiStatus = 'working';
+            }
         }
-        return view('create', compact('status', 'now', 'time'));
+
+        if (config('app.debug')) {
+            Log::debug('attendance.create.ui', [
+                'user_id'        => auth()->id(),
+                'att_id'         => $attendance?->id,
+                'ui_status'      => $uiStatus,
+                'has_open_break' => $hasOpenBreak,
+            ]);
+        }
+
+        return view('create', compact('uiStatus', 'now', 'time', 'attendance', 'hasOpenBreak'));
     }
 
     public function store(Request $request)
     {
-        $now = Carbon::now();
-        $now_date = $now->format('Y-m-d');
-        $action = $request->input('action');
-        $attendance = Attendance::where('user_id', auth()->id())->where('work_date', $now_date)->first();
+        $now      = Carbon::now();
+        $now_date = $now->toDateString();
+        $action   = $request->input('action');
 
-        if ($action == 'clock_in') {
+        $attendance = Attendance::where('user_id', auth()->id())
+            ->whereDate('work_date', $now_date)
+            ->with('breaks')
+            ->latest('id')
+            ->first();
+
+        if ($action === 'clock_in') {
             if (is_null($attendance)) {
-                Attendance::create([
+                $new = Attendance::create([
                     'user_id'     => auth()->id(),
                     'work_date'   => $now_date,
                     'status'      => 'working',
                     'clock_in_at' => $now,
                 ]);
-                return redirect('/attendance')->with('success', '出勤しました。');
+                if (config('app.debug')) {
+                    Log::debug('attendance.clock_in', ['user_id' => auth()->id(), 'att_id' => $new->id]);
+                }
+                return redirect('/attendance');
             }
             if (is_null($attendance->clock_in_at)) {
-                $attendance->status = 'working';
-                $attendance->clock_in_at = $now;
-                $attendance->clock_out_at = null;
+                $attendance->status        = 'working';
+                $attendance->clock_in_at   = $now;
+                $attendance->clock_out_at  = null;
                 $attendance->save();
-                return redirect('/attendance')->with('success', '出勤しました。');
+                if (config('app.debug')) {
+                    Log::debug('attendance.clock_in.reopen', ['att_id' => $attendance->id]);
+                }
+                return redirect('/attendance');
             }
             return redirect('/attendance')->with('error', '既に出勤済みです。');
-        } elseif ($action == 'clock_out') {
+        }
+
+        if ($action === 'clock_out') {
             if (is_null($attendance)) {
                 return redirect('/attendance')->with('error', '出勤していません。');
             }
             if ($attendance->clock_out_at) {
                 return redirect('/attendance')->with('error', '既に退勤済みです。');
             }
-            $has_open_breakBreak = $attendance->breaks()
-                ->whereNull('break_ended_at')
-                ->exists();
-            if ($has_open_breakBreak) {
+            $hasOpen = $attendance->breaks()->whereNull('break_ended_at')->exists();
+            if ($hasOpen) {
                 return redirect('/attendance')->with('error', '休憩を終了してから退勤してください。');
             }
 
-            $attendance->status = 'finished';
+            $attendance->status       = 'finished';
             $attendance->clock_out_at = $now;
             $attendance->save();
+            if (config('app.debug')) {
+                Log::debug('attendance.clock_out', ['att_id' => $attendance->id]);
+            }
             return redirect('/attendance');
-        } elseif ($action == "break_start") {
+        }
+
+        if ($action === 'break_start') {
             if (is_null($attendance) || is_null($attendance->clock_in_at)) {
                 return redirect('/attendance')->with('error', '出勤していません。');
             }
             if (!is_null($attendance->clock_out_at)) {
                 return redirect('/attendance')->with('error', '既に退勤済みです。');
             }
+
             try {
                 DB::transaction(function () use ($now, $attendance) {
-                    $att = Attendance::where('id', $attendance->id)->lockForUpdate()->first();
+                    $att = Attendance::whereKey($attendance->id)->lockForUpdate()->first();
 
-                    $has_open_breakBreak = $att->breaks()->whereNull('break_ended_at')->lockForUpdate()->exists();
-                    if ($has_open_breakBreak) {
-                        throw new \RuntimeException(('既に休憩中です。'));
+                    if ($att->breaks()->whereNull('break_ended_at')->lockForUpdate()->exists()) {
+                        throw new \RuntimeException('既に休憩中です。');
                     }
-                    $att->breaks()->create([
+
+                    $nextSeq = (int)($att->breaks()->lockForUpdate()->max('sequence_no')) + 1;
+
+                    $br = $att->breaks()->create([
                         'user_id'          => auth()->id(),
+                        'sequence_no'      => $nextSeq,
                         'break_started_at' => $now,
                     ]);
+
                     $att->status = 'on_break';
                     $att->save();
+
+                    if (config('app.debug')) {
+                        Log::debug('attendance.break_start', [
+                            'att_id'   => $att->id,
+                            'break_id' => $br->id,
+                            'seq'      => $nextSeq,
+                        ]);
+                    }
                 });
             } catch (\RuntimeException $e) {
                 return redirect('/attendance')->with('error', $e->getMessage());
             } catch (\Throwable $e) {
+                Log::error('attendance.break_start.error', [
+                    'att_id' => $attendance->id ?? null,
+                    'ex'     => $e->getMessage(),
+                ]);
                 return redirect('/attendance')->with('error', '処理中にエラーが発生しました。もう一度お試しください。');
             }
-            return redirect('/attendance')->with('success', '休憩に入りました。');
-        } elseif ($action == "break_end") {
+            return redirect('/attendance');
+        }
+
+        if ($action === 'break_end') {
             if (is_null($attendance) || is_null($attendance->clock_in_at)) {
                 return redirect('/attendance')->with('error', '出勤していません。');
             }
@@ -106,9 +171,8 @@ class AttendancesController extends Controller
 
             try {
                 DB::transaction(function () use ($attendance, $now) {
-                    $att = Attendance::whereKey($attendance->id)
-                        ->lockForUpdate()
-                        ->first();
+                    $att = Attendance::whereKey($attendance->id)->lockForUpdate()->first();
+
                     $open_break = $att->breaks()
                         ->whereNull('break_ended_at')
                         ->orderByDesc('break_started_at')
@@ -122,15 +186,27 @@ class AttendancesController extends Controller
                     $open_break->break_ended_at = $now;
                     $open_break->save();
 
-                    $att->status = 'working';
+                    $stillOpen = $att->breaks()->whereNull('break_ended_at')->exists();
+                    $att->status = $stillOpen ? 'on_break' : 'working';
                     $att->save();
+
+                    if (config('app.debug')) {
+                        Log::debug('attendance.break_end', [
+                            'att_id'   => $att->id,
+                            'break_id' => $open_break->id,
+                        ]);
+                    }
                 });
             } catch (\RuntimeException $e) {
                 return redirect('/attendance')->with('error', $e->getMessage());
             } catch (\Throwable $e) {
+                Log::error('attendance.break_end.error', [
+                    'att_id' => $attendance->id ?? null,
+                    'ex'     => $e->getMessage(),
+                ]);
                 return redirect('/attendance')->with('error', '処理中にエラーが発生しました。もう一度お試しください。');
             }
-            return redirect('/attendance')->with('success', '休憩を終了しました。');
+            return redirect('/attendance');
         }
     }
 
@@ -191,6 +267,7 @@ class AttendancesController extends Controller
         }
         return view('index', compact('daily_rows', 'current_year_month', 'prev_ym', 'next_ym'));
     }
+
     public function show($id)
     {
         $user = Auth::user();
@@ -320,7 +397,8 @@ class AttendancesController extends Controller
 
         return redirect()->route('attendance.show', ['id' => $attendance->id])->with('status', '修正申請を受け付けました。');
     }
-    private function combineDateHhmm(?Carbon $date, ?String $hhmm)
+
+    private function combineDateHhmm(?Carbon $date, ?string $hhmm)
     {
         if ($date === null || $hhmm === null || $hhmm === '') {
             return null;

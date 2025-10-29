@@ -122,10 +122,17 @@ class AttendanceController extends Controller
         };
 
         DB::transaction(function () use ($request, $attendance, $toCarbon) {
-            $attendance->clock_in_at  = $toCarbon($request->input('work-start'));
-            $attendance->clock_out_at = $toCarbon($request->input('work-end'));
+            $inHm  = $request->input('clock_in_at')  ?? $request->input('work-start');
+            $outHm = $request->input('clock_out_at') ?? $request->input('work-end');
 
+            if ($inHm !== null && $inHm !== '') {
+                $attendance->clock_in_at = $toCarbon($inHm);
+            }
+            if ($outHm !== null && $outHm !== '') {
+                $attendance->clock_out_at = $toCarbon($outHm);
+            }
 
+            $attendance->remarks = $request->input('remarks');
             $attendance->breaks()->delete();
 
             $rows = collect($request->input('breaks', []))
@@ -146,6 +153,7 @@ class AttendanceController extends Controller
 
         return back()->with('status', '勤怠を更新しました（管理）');
     }
+
 
     private function resolveForView(Attendance $attendance, ?AttendanceApproval $pending): array
     {

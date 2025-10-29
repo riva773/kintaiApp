@@ -44,7 +44,7 @@
                     </tr>
                     @empty
                     <tr class="approvals-table-row">
-                        <td colspan="6" class="empty-cell">申請はまだありません </td>
+                        <td colspan="6" class="empty-cell">申請はありません </td>
                     </tr>
                     @endforelse
                 </tbody>

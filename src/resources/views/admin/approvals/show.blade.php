@@ -70,7 +70,9 @@
     @if ($is_pending)
     <form action="{{ route('approvals.approve', ['attendance_correct_request' => $approval]) }}" method="post">
         @csrf
-        <button type="submit" class="btn-edit">承認</button>
+        <div class="btn">
+            <button type="submit" class="btn-edit">承認</button>
+        </div>
     </form>
     @else
     <div class="approved">

@@ -74,7 +74,6 @@ body {
     padding: 8px 30px;
     border-radius: 4px;
     margin-top: 30px;
-    margin-left: 790px;
     cursor: pointer;
 }
 
@@ -95,4 +94,9 @@ body {
     color: red;
     margin-top: 30px;
     margin-left: 620px;
+}
+
+.btn {
+    display: flex;
+    justify-content: end;
 }

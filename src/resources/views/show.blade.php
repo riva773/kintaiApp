@@ -154,8 +154,9 @@
                 @enderror
             </div>
         </div>
-
-        <button type="submit" class="btn-edit">修正</button>
+        <div class="btn">
+            <button type="submit" class="btn-edit">修正</button>
+        </div>
     </form>
     @endif
 </div>

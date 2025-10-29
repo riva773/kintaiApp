@@ -10,6 +10,7 @@ class AttendanceApproval extends Model
     use HasFactory;
 
     protected $fillable = [
+        'attendance_id',
         'user_id',
         'proposed_clock_in_at',
         'proposed_clock_out_at',

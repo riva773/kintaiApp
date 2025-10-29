@@ -18,6 +18,8 @@ class WorkBreak extends Model
 
     protected $fillable = [
         'attendance_id',
+        'user_id',
+        'sequence_no',
         'break_started_at',
         'break_ended_at',
     ];
