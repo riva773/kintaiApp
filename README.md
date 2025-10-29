@@ -10,6 +10,9 @@ docker compose up -d --build
 docker compose exec php composer install
 docker compose exec php php artisan key:generate
 docker compose exec php php artisan migrate --seed
+# 管理者ユーザーのメールアドレス、パスワードは以下です。
+        メールアドレス = admin@example.com
+        パスワード = password
 ```
 
 ## .env 設定
